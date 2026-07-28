@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Mateo's Skate Studio</title>
+<meta name="color-scheme" content="dark light" />
+<body>
+<!--
+  MATEO'S SKATE STUDIO
+  A free-play skateboarding prototype + a live "studio" for iterating on game feel.
+  Everything is drawn on a canvas — no art assets, no libraries, one file.
+
+  The point of this build is not to be a finished game. It's to give Mateo a loop:
+    play  ->  change a number in the Studio  ->  feel the difference  ->  repeat.
+  That is game design. The Ideas tab is where his imagination gets written down.
+-->
+<style>
+  /* ---- Design tokens: "Dusk Skatepark" ------------------------------------
+     Committed dark game world (the canvas paints its own dusk sky + concrete),
+     but the UI chrome is theme-aware so it isn't broken in light mode.        */
+  :root{
+    --ink:#0f0d17;            /* griptape black, blue-biased */
+    --panel:#191527;          /* panel surface */
+    --panel-2:#221c34;        /* raised surface */
+    --line:#332a4d;           /* hairline */
+    --text:#efeafc;           /* primary text */
+    --muted:#a79fc4;          /* secondary text */
+    --coral:#ff5c39;          /* primary accent — spray-paint orange */
+    --volt:#c6ff42;           /* score / go */
+    --cyan:#37d6e6;           /* trick zones */
+    --gold:#ffce4a;           /* unlocks */
+    --radius:14px;
+    --shadow:0 12px 30px -12px #000c;
+  }
+  :root[data-theme="light"]{
+    --ink:#efeaf6; --panel:#ffffff; --panel-2:#f4f0fb; --line:#e0d8ef;
+    --text:#1c1630; --muted:#6d6390; --shadow:0 12px 30px -14px #4a3a7033;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --ink:#efeaf6; --panel:#ffffff; --panel-2:#f4f0fb; --line:#e0d8ef;
+      --text:#1c1630; --muted:#6d6390; --shadow:0 12px 30px -14px #4a3a7033;
+    }
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--ink); color:var(--text); overflow:hidden;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased; user-select:none; touch-action:none;
+  }
+  .display{
+    font-weight:900; letter-spacing:-.02em; text-transform:uppercase;
+    line-height:.95;
+  }
+  .mono{ font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+
+  #stage{ position:fixed; inset:0; }
+  #game{ display:block; width:100%; height:100%; }
+
+  /* ---- HUD (top-left) ---- */
+  .hud{ position:fixed; top:0; left:0; padding:14px; display:flex; gap:10px;
+    flex-wrap:wrap; align-items:flex-start; pointer-events:none; z-index:5; }
+  .chip{ background:#0f0d17cc; border:1px solid #ffffff1f; border-radius:999px;
+    padding:7px 13px; backdrop-filter:blur(8px); display:flex; align-items:baseline; gap:8px; }
+  .chip .k{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#c9c1e6; }
+  .chip .v{ font-size:19px; font-weight:900; }
+  .chip.score .v{ color:var(--volt) }
+  .chip.combo{ display:none; border-color:var(--coral); background:#2a0f0acc }
+  .chip.combo.on{ display:flex; animation:pop .18s ease }
+  .chip.combo .v{ color:var(--coral) }
+  @keyframes pop{ from{ transform:scale(.85) } to{ transform:scale(1) } }
+  .bar{ position:relative; width:120px; height:8px; border-radius:999px;
+    background:#ffffff26; overflow:hidden; align-self:center }
+  .bar > i{ position:absolute; inset:0; width:0%; background:linear-gradient(90deg,var(--gold),var(--coral));
+    transition:width .2s ease }
+
+  /* ---- Studio panel ---- */
+  #studio{ position:fixed; top:0; right:0; height:100%; width:340px; max-width:88vw;
+    background:var(--panel); border-left:1px solid var(--line); box-shadow:var(--shadow);
+    transform:translateX(100%); transition:transform .32s cubic-bezier(.2,.8,.2,1);
+    display:flex; flex-direction:column; z-index:20; }
+  #studio.open{ transform:none }
+  .studio-head{ padding:16px 16px 10px; border-bottom:1px solid var(--line) }
+  .studio-head h1{ margin:0; font-size:20px }
+  .studio-head h1 span{ color:var(--coral) }
+  .studio-head p{ margin:4px 0 0; font-size:12px; color:var(--muted) }
+  .tabs{ display:flex; gap:6px; padding:12px 14px 0 }
+  .tab{ flex:1; padding:9px 6px; border:1px solid var(--line); background:transparent;
+    color:var(--muted); border-radius:10px 10px 0 0; font:inherit; font-weight:800;
+    font-size:12px; letter-spacing:.06em; text-transform:uppercase; cursor:pointer;
+    border-bottom:none }
+  .tab.active{ color:var(--text); background:var(--panel-2); }
+  .tab:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px }
+  .panes{ flex:1; overflow-y:auto; background:var(--panel-2) }
+  .pane{ display:none; padding:16px }
+  .pane.active{ display:block }
+
+  .field{ margin:0 0 16px }
+  .field label{ display:flex; justify-content:space-between; align-items:baseline;
+    font-size:13px; font-weight:700; margin-bottom:7px }
+  .field .val{ color:var(--cyan); font-size:13px }
+  .field .hint{ font-size:11px; color:var(--muted); margin-top:5px; line-height:1.4 }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:6px;
+    border-radius:999px; background:var(--line); outline:none }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:20px; height:20px;
+    border-radius:50%; background:var(--coral); border:3px solid var(--panel); cursor:pointer;
+    box-shadow:0 2px 6px #0007 }
+  input[type=range]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%;
+    background:var(--coral); border:3px solid var(--panel); cursor:pointer }
+  input[type=range]:focus-visible::-webkit-slider-thumb{ outline:2px solid var(--cyan); outline-offset:2px }
+
+  .toggles{ display:flex; flex-direction:column; gap:9px }
+  .toggle{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:11px 13px; border:1px solid var(--line); border-radius:11px; background:var(--panel);
+    cursor:pointer; font-size:13px; font-weight:600 }
+  .toggle small{ display:block; color:var(--muted); font-weight:400; font-size:11px; margin-top:2px }
+  .sw{ flex:none; width:42px; height:24px; border-radius:999px; background:var(--line);
+    position:relative; transition:background .2s }
+  .sw::after{ content:""; position:absolute; top:2px; left:2px; width:20px; height:20px;
+    border-radius:50%; background:#fff; transition:transform .2s }
+  .toggle.on .sw{ background:var(--volt) }
+  .toggle.on .sw::after{ transform:translateX(18px) }
+
+  .swatches{ display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-bottom:8px }
+  .swatch{ aspect-ratio:1; border-radius:12px; border:2px solid #0004; cursor:pointer;
+    position:relative; display:flex; align-items:flex-end; justify-content:center;
+    padding-bottom:5px; font-size:9px; font-weight:800; color:#0009; overflow:hidden }
+  .swatch.sel{ outline:3px solid var(--text); outline-offset:2px }
+  .swatch.locked{ cursor:not-allowed; filter:grayscale(1) brightness(.55) }
+  .swatch .lock{ position:absolute; inset:0; display:flex; align-items:center;
+    justify-content:center; font-size:16px; color:#fff }
+  .sub{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+    margin:14px 0 8px; font-weight:800 }
+
+  .idea-prompt{ font-size:12px; color:var(--muted); margin:0 0 6px }
+  textarea{ width:100%; min-height:64px; resize:vertical; background:var(--panel);
+    color:var(--text); border:1px solid var(--line); border-radius:10px; padding:9px 11px;
+    font:inherit; font-size:13px; margin-bottom:12px }
+  textarea:focus-visible{ outline:2px solid var(--cyan); outline-offset:1px }
+  .idea-list{ display:flex; flex-direction:column; gap:8px }
+  .idea{ display:flex; gap:8px; align-items:flex-start; background:var(--panel);
+    border:1px solid var(--line); border-left:3px solid var(--coral); border-radius:9px;
+    padding:9px 11px; font-size:13px; line-height:1.35 }
+  .idea button{ margin-left:auto; flex:none; background:none; border:none; color:var(--muted);
+    cursor:pointer; font-size:15px; line-height:1 }
+  .newidea{ display:flex; gap:8px; margin-top:2px }
+  .newidea input{ flex:1; background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:9px 11px; font:inherit; font-size:13px }
+  .newidea input:focus-visible{ outline:2px solid var(--cyan); outline-offset:1px }
+
+  .btn{ font:inherit; font-weight:800; cursor:pointer; border-radius:11px; padding:10px 14px;
+    border:1px solid var(--line); background:var(--panel); color:var(--text) }
+  .btn.accent{ background:var(--coral); border-color:var(--coral); color:#1a0a06 }
+  .btn:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px }
+  .btn.full{ width:100% }
+
+  /* Floating open-studio button + hint */
+  #openStudio{ position:fixed; top:14px; right:14px; z-index:15; }
+  #openStudio.hidden{ display:none }
+
+  /* Onboard / how-to overlay */
+  #intro{ position:fixed; inset:0; z-index:40; display:flex; align-items:center;
+    justify-content:center; padding:20px; background:radial-gradient(120% 90% at 50% 0%,#2a1c4dee,#0b0913f2) }
+  #intro.gone{ display:none }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:20px;
+    box-shadow:var(--shadow); max-width:440px; width:100%; padding:24px; text-align:center }
+  .card h2{ margin:0 0 4px; font-size:30px }
+  .card h2 span{ color:var(--coral) }
+  .card .tag{ font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--cyan);
+    font-weight:800; margin-bottom:12px }
+  .keys{ display:grid; grid-template-columns:auto 1fr; gap:8px 14px; text-align:left;
+    margin:16px 0; font-size:14px }
+  .keys b{ display:inline-flex; gap:4px }
+  kbd{ background:var(--panel-2); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:6px; padding:2px 8px; font:inherit; font-size:12px; font-weight:700 }
+
+  /* Mobile controls */
+  #touch{ position:fixed; inset:0; z-index:8; pointer-events:none; display:none }
+  @media (pointer:coarse){ #touch{ display:block } }
+  #stick{ position:absolute; left:24px; bottom:26px; width:132px; height:132px;
+    border-radius:50%; background:#ffffff14; border:1px solid #ffffff2e; pointer-events:auto }
+  #nub{ position:absolute; left:46px; top:46px; width:56px; height:56px; border-radius:50%;
+    background:#ffffff33; border:1px solid #ffffff55 }
+  .tbtn{ position:absolute; right:24px; width:82px; height:82px; border-radius:50%;
+    background:#ff5c3933; border:2px solid var(--coral); color:#fff; font-weight:900;
+    font-size:13px; pointer-events:auto; display:flex; align-items:center; justify-content:center;
+    text-transform:uppercase; letter-spacing:.03em }
+  #btnTrick{ bottom:124px; background:#37d6e633; border-color:var(--cyan) }
+  #btnJump{ bottom:26px }
+
+  .foot{ position:fixed; left:0; right:0; bottom:0; z-index:4; padding:10px 14px;
+    display:flex; gap:8px; align-items:center; justify-content:center; pointer-events:none }
+  .foot .k{ font-size:11px; color:#c9c1e6cc; background:#0f0d17aa; padding:5px 11px;
+    border-radius:999px; border:1px solid #ffffff1a }
+  @media (pointer:coarse){ .foot{ display:none } }
+</style>
+
+<div id="stage"><canvas id="game"></canvas></div>
+
+<!-- HUD -->
+<div class="hud">
+  <div class="chip score"><span class="k">Score</span><span class="v mono" id="hScore">0</span></div>
+  <div class="chip"><span class="k">Board Lv</span><span class="v mono" id="hLevel">–</span>
+    <div class="bar"><i id="hXP"></i></div></div>
+  <div class="chip combo" id="hComboWrap"><span class="k">Combo</span><span class="v mono" id="hCombo">x1</span></div>
+</div>
+
+<button class="btn accent" id="openStudio">Studio ✎</button>
+
+<!-- Studio -->
+<aside id="studio" aria-label="Game design studio">
+  <div class="studio-head">
+    <h1>Mateo's <span>Studio</span></h1>
+    <p>Change a number. Feel the game change. That's designing.</p>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="feel">Feel</button>
+    <button class="tab" data-tab="style">Style</button>
+    <button class="tab" data-tab="ideas">Ideas</button>
+  </div>
+  <div class="panes">
+    <!-- FEEL -->
+    <section class="pane active" data-pane="feel">
+      <div class="field">
+        <label>Jump Power <span class="val" id="vJump"></span></label>
+        <input type="range" id="sJump" min="150" max="460" step="1">
+        <div class="hint">How high the skater pops. Big jumps = more air = more trick time.</div>
+      </div>
+      <div class="field">
+        <label>Air Time <span class="val" id="vAir"></span></label>
+        <input type="range" id="sAir" min="0" max="100" step="1">
+        <div class="hint">Turns gravity down so you hang in the air longer. Floaty vs. snappy.</div>
+      </div>
+      <div class="field">
+        <label>Skate Speed <span class="val" id="vSpeed"></span></label>
+        <input type="range" id="sSpeed" min="150" max="560" step="1">
+        <div class="hint">Top speed while riding the board.</div>
+      </div>
+      <div class="field">
+        <label>Grip <span class="val" id="vGrip"></span></label>
+        <input type="range" id="sGrip" min="0" max="100" step="1">
+        <div class="hint">Low grip = slidey, driftier board. High grip = tight, arcade turns.</div>
+      </div>
+      <div class="field">
+        <label>People <span class="val" id="vPeople"></span></label>
+        <input type="range" id="sPeople" min="0" max="40" step="1">
+        <div class="hint">How busy the plaza is. People to jump over!</div>
+      </div>
+      <div class="sub">Wild ideas</div>
+      <div class="toggles">
+        <div class="toggle" id="tSlomo"><div>Slow-mo tricks<small>Time slows while you're in the air</small></div><div class="sw"></div></div>
+        <div class="toggle" id="tBouncy"><div>Bouncy people<small>Bump someone and they boing away</small></div><div class="sw"></div></div>
+        <div class="toggle" id="tMega"><div>Mega ramps<small>Launch way, way higher off ramps</small></div><div class="sw"></div></div>
+      </div>
+      <div class="sub">Reset</div>
+      <button class="btn full" id="resetFeel">Back to default feel</button>
+    </section>
+
+    <!-- STYLE -->
+    <section class="pane" data-pane="style">
+      <div class="sub">Board</div>
+      <div class="swatches" id="boardSwatches"></div>
+      <div class="sub">Outfit</div>
+      <div class="swatches" id="outfitSwatches"></div>
+      <p class="idea-prompt" id="unlockNote"></p>
+    </section>
+
+    <!-- IDEAS -->
+    <section class="pane" data-pane="ideas">
+      <p class="idea-prompt">This is where your game gets built. Every idea you write is saved.</p>
+      <p class="idea-prompt"><b>A trick I want in the game…</b></p>
+      <textarea id="ideaTrick" placeholder="e.g. a mega backflip called The Mateo"></textarea>
+      <p class="idea-prompt"><b>A cool place to skate…</b></p>
+      <textarea id="ideaPlace" placeholder="e.g. a rooftop with a giant loop ramp"></textarea>
+      <p class="idea-prompt"><b>What my skater looks like…</b></p>
+      <textarea id="ideaLook" placeholder="e.g. green hoodie, flame board, gold wheels"></textarea>
+      <div class="sub">Idea wall</div>
+      <div class="newidea">
+        <input id="ideaInput" placeholder="Type any idea + Enter" aria-label="Add an idea">
+        <button class="btn accent" id="ideaAdd">Add</button>
+      </div>
+      <div class="idea-list" id="ideaList" style="margin-top:12px"></div>
+      <div class="sub">Spark</div>
+      <p class="idea-prompt" id="spark"></p>
+      <button class="btn full" id="sparkBtn">Give me a new idea question →</button>
+    </section>
+  </div>
+</aside>
+
+<!-- Touch controls -->
+<div id="touch">
+  <div id="stick"><div id="nub"></div></div>
+  <div class="tbtn" id="btnTrick">Trick</div>
+  <div class="tbtn" id="btnJump">Jump</div>
+</div>
+
+<div class="foot">
+  <span class="k"><b>Move</b> WASD / Arrows</span>
+  <span class="k"><b>Jump</b> Space</span>
+  <span class="k"><b>Tricks</b> J K L (in the air)</span>
+</div>
+
+<!-- Intro -->
+<div id="intro">
+  <div class="card">
+    <div class="tag">Free-play skate prototype</div>
+    <h2>Mateo's <span>Skate</span></h2>
+    <p style="color:var(--muted);margin:6px 0 0;font-size:14px">
+      Walk around the plaza, grab the board, and start landing tricks.
+      Then hit <b>Studio</b> to change how it all feels.</p>
+    <div class="keys">
+      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move any direction (even diagonal)</span>
+      <span><kbd>Space</kbd></span><span>Jump — hop right over people</span>
+      <span><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></span><span>Do tricks while you're in the air</span>
+      <span>🛹</span><span>Ride into the glowing ramps for big air</span>
+    </div>
+    <button class="btn accent full" id="startBtn">Let's skate</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* =====================================================================
+   0. Setup
+   ===================================================================== */
+var canvas = document.getElementById('game');
+var ctx = canvas.getContext('2d');
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+var VW = 0, VH = 0;
+function resize(){
+  VW = window.innerWidth; VH = window.innerHeight;
+  canvas.width = Math.floor(VW*DPR); canvas.height = Math.floor(VH*DPR);
+  canvas.style.width = VW+'px'; canvas.style.height = VH+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* World */
+var WORLD = { w: 2600, h: 1800 };
+
+/* =====================================================================
+   1. Tunable settings (these are exactly what the Studio sliders drive)
+   ===================================================================== */
+var DEFAULTS = {
+  jump: 300,      // initial upward velocity of a jump
+  air: 45,        // 0..100 -> gravity (higher slider = more hang time)
+  speed: 340,     // board top speed
+  grip: 55,       // 0..100 -> acceleration/turn tightness
+  people: 14,
+  slomo:false, bouncy:false, mega:false
+};
+var S = Object.assign({}, DEFAULTS);
+
+function gravityFromAir(a){ return 1400 - (a/100)*1000; } // 1400 (snappy) .. 400 (floaty)
+function accelFromGrip(g){ return 3 + (g/100)*11; }       // 3 (drifty) .. 14 (tight)
+var walkSpeed = 165;
+
+/* =====================================================================
+   2. Style: boards + outfits (some unlock with score)
+   ===================================================================== */
+var boards = [
+  { name:'Classic', deck:'#e8532e', wheels:'#f4d35e', need:0 },
+  { name:'Ocean',   deck:'#2aa7c4', wheels:'#eaf6ff', need:0 },
+  { name:'Slime',   deck:'#8ddb2a', wheels:'#1c1630', need:400 },
+  { name:'Grape',   deck:'#8a5cff', wheels:'#ffd23f', need:900 },
+  { name:'Flame',   deck:'#ff3b3b', wheels:'#ffce4a', need:1800 },
+  { name:'Gold',    deck:'#ffce4a', wheels:'#3a2a12', need:3200 },
+  { name:'Void',    deck:'#20182f', wheels:'#c6ff42', need:5000 },
+  { name:'Candy',   deck:'#ff7bd0', wheels:'#8ff0ff', need:7000 }
+];
+var outfits = [
+  { name:'Red',    body:'#ef4d3a', need:0 },
+  { name:'Teal',   body:'#28c2a8', need:0 },
+  { name:'Sun',    body:'#ffb020', need:600 },
+  { name:'Berry',  body:'#c341a8', need:1200 },
+  { name:'Mint',   body:'#5fe08a', need:2400 },
+  { name:'Cobalt', body:'#3d6bff', need:4200 },
+  { name:'Ghost',  body:'#e7e2f5', need:6000 },
+  { name:'Magma',  body:'#ff5c39', need:8500 }
+];
+var sel = { board:0, outfit:0 };
+
+/* =====================================================================
+   3. Entities
+   ===================================================================== */
+var player = {
+  x: WORLD.w/2, y: WORLD.h/2, vx:0, vy:0,
+  z:0, vz:0, onGround:true,
+  face:0,          // facing angle for the board
+  riding:false,
+  spin:0,          // visual trick spin
+  flip:0
+};
+
+var peds = [];
+function makePed(){
+  return {
+    x: 100 + Math.random()*(WORLD.w-200),
+    y: 100 + Math.random()*(WORLD.h-200),
+    tx:0, ty:0, timer:0,
+    hue: 200 + Math.random()*140,
+    vx:0, vy:0, boing:0
+  };
+}
+function setPeople(n){
+  n = Math.round(n);
+  while(peds.length < n) peds.push(makePed());
+  while(peds.length > n) peds.pop();
+}
+
+/* Board pickup — the "earn a skateboard" moment */
+var boardPickup = { x: WORLD.w/2 + 220, y: WORLD.h/2 - 60, taken:false, t:0 };
+
+/* Ramps: ride in fast -> launch. Position + facing (launch direction). */
+var ramps = [
+  { x:700,  y:520,  dir:0.0,        len:150 },
+  { x:1950, y:600,  dir:Math.PI,    len:150 },
+  { x:1300, y:1300, dir:-Math.PI/2, len:170 },
+  { x:600,  y:1250, dir:0.6,        len:150 },
+  { x:2050, y:1300, dir:Math.PI*0.8,len:150 }
+];
+
+/* Trick zones: score multiplier areas */
+var zones = [
+  { x:1300, y:520,  r:220, mult:2 },
+  { x:400,  y:900,  r:170, mult:2 },
+  { x:2200, y:950,  r:180, mult:3 }
+];
+
+/* Collectible crates -> quick score pops that reveal unlocks */
+var crates = [];
+function seedCrates(){
+  crates = [];
+  var spots = [[900,300],[2200,400],[300,1500],[1700,1550],[1150,950]];
+  for(var i=0;i<spots.length;i++) crates.push({x:spots[i][0],y:spots[i][1],taken:false,t:Math.random()*6});
+}
+seedCrates();
+
+/* Floating score popups */
+var pops = [];
+function pop(x,y,text,color){ pops.push({x:x,y:y,text:text,color:color||'#fff',life:1}); }
+
+/* =====================================================================
+   4. Game state
+   ===================================================================== */
+var G = {
+  score:0, level:0, xp:0, xpNeed:60,
+  combo:0, comboScore:0, tricks:0,
+  best:0
+};
+function trickMult(){ return 1 + G.level*0.4; }
+
+/* =====================================================================
+   5. Input
+   ===================================================================== */
+var keys = {};
+var trickBuffer = false, jumpBuffer = false;
+var TRICKS = ['Kickflip','360 Spin','Grind','Nose Grab','Heelflip','The Mateo'];
+
+window.addEventListener('keydown', function(e){
+  var k = e.key.toLowerCase();
+  if(['arrowup','arrowdown','arrowleft','arrowright',' '].indexOf(k)>=0) e.preventDefault();
+  if(k===' ') jumpBuffer = true;
+  if(k==='j'||k==='k'||k==='l') trickBuffer = true;
+  keys[k] = true;
+}, {passive:false});
+window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
+
+/* Touch */
+var stickVec = {x:0,y:0};
+(function touchSetup(){
+  var stick = document.getElementById('stick'), nub = document.getElementById('nub');
+  var origin=null, R=52;
+  function start(e){ var t=e.changedTouches[0]; origin={x:t.clientX,y:t.clientY}; move(e); }
+  function move(e){
+    if(!origin) return; e.preventDefault();
+    var t=e.changedTouches[0]; var dx=t.clientX-origin.x, dy=t.clientY-origin.y;
+    var d=Math.hypot(dx,dy)||1; var c=Math.min(d,R);
+    stickVec.x = (dx/d)*(c/R); stickVec.y = (dy/d)*(c/R);
+    nub.style.transform = 'translate('+ (stickVec.x*R) +'px,'+ (stickVec.y*R) +'px)';
+  }
+  function end(){ origin=null; stickVec.x=0; stickVec.y=0; nub.style.transform=''; }
+  stick.addEventListener('touchstart',start,{passive:false});
+  stick.addEventListener('touchmove',move,{passive:false});
+  stick.addEventListener('touchend',end); stick.addEventListener('touchcancel',end);
+
+  document.getElementById('btnJump').addEventListener('touchstart',function(e){e.preventDefault();jumpBuffer=true;},{passive:false});
+  document.getElementById('btnTrick').addEventListener('touchstart',function(e){e.preventDefault();trickBuffer=true;},{passive:false});
+})();
+
+/* =====================================================================
+   6. Update
+   ===================================================================== */
+function moveInput(){
+  var dx=0, dy=0;
+  if(keys['a']||keys['arrowleft']) dx-=1;
+  if(keys['d']||keys['arrowright']) dx+=1;
+  if(keys['w']||keys['arrowup']) dy-=1;
+  if(keys['s']||keys['arrowdown']) dy+=1;
+  dx += stickVec.x; dy += stickVec.y;
+  var d = Math.hypot(dx,dy);
+  if(d>1){ dx/=d; dy/=d; }        // clamp diagonal so it isn't faster
+  return {x:dx, y:dy, mag:Math.min(d,1)};
+}
+
+function update(dt){
+  var slow = (S.slomo && !player.onGround) ? 0.45 : 1;
+  var t = dt*slow;
+
+  var inp = moveInput();
+  var targetSpeed = player.riding ? S.speed : walkSpeed;
+  var accel = accelFromGrip(S.grip);
+  // When walking, snappier; when riding, momentum from grip slider.
+  var a = player.riding ? accel : 12;
+
+  var tvx = inp.x*targetSpeed*inp.mag;
+  var tvy = inp.y*targetSpeed*inp.mag;
+  player.vx += (tvx - player.vx) * Math.min(1, a*t);
+  player.vy += (tvy - player.vy) * Math.min(1, a*t);
+
+  if(inp.mag>0.1) player.face = Math.atan2(player.vy, player.vx);
+
+  player.x += player.vx*t;
+  player.y += player.vy*t;
+
+  // world bounds
+  player.x = Math.max(30, Math.min(WORLD.w-30, player.x));
+  player.y = Math.max(30, Math.min(WORLD.h-30, player.y));
+
+  // Jump
+  if(jumpBuffer && player.onGround){
+    player.vz = S.jump; player.onGround = false;
+  }
+  jumpBuffer = false;
+
+  // Gravity / height
+  if(!player.onGround){
+    player.vz -= gravityFromAir(S.air)*t;
+    player.z += player.vz*t;
+    player.spin += (player.spinRate||0)*t;
+    if(player.z <= 0){
+      player.z = 0; player.onGround = true; player.vz=0;
+      player.spin = 0; player.flip = 0; player.spinRate = 0;
+      landCombo();
+    }
+  }
+
+  // Ramps: launch when riding fast through a ramp on the ground
+  if(player.riding && player.onGround){
+    var speed = Math.hypot(player.vx,player.vy);
+    for(var i=0;i<ramps.length;i++){
+      var rp=ramps[i];
+      if(Math.abs(player.x-rp.x)<70 && Math.abs(player.y-rp.y)<70 && speed>140){
+        player.vz = S.jump*(S.mega?2.1:1.35);
+        player.onGround=false;
+        pop(player.x, player.y-40, 'RAMP!', '#37d6e6');
+      }
+    }
+  }
+
+  // Tricks (only airborne + riding)
+  if(trickBuffer){
+    if(!player.onGround && player.riding){
+      doTrick();
+    } else if(!player.riding){
+      pop(player.x, player.y-40, 'grab a board first!', '#ffce4a');
+    }
+    trickBuffer=false;
+  }
+
+  // Board pickup
+  if(!boardPickup.taken){
+    boardPickup.t += t;
+    if(Math.hypot(player.x-boardPickup.x, player.y-boardPickup.y) < 46){
+      boardPickup.taken = true; player.riding = true;
+      pop(boardPickup.x, boardPickup.y-30, 'GOT A BOARD! 🛹', '#c6ff42');
+      addScore(50, player.x, player.y);
+    }
+  }
+
+  // Crates
+  for(var c=0;c<crates.length;c++){
+    var cr=crates[c]; cr.t += t;
+    if(!cr.taken && Math.hypot(player.x-cr.x, player.y-cr.y) < 42){
+      cr.taken = true;
+      addScore(120, cr.x, cr.y);
+      pop(cr.x, cr.y-34, '+120 crate!', '#ffce4a');
+    }
+  }
+
+  updatePeds(t);
+  // popups
+  for(var p=pops.length-1;p>=0;p--){
+    pops[p].y -= 30*dt; pops[p].life -= dt*0.9;
+    if(pops[p].life<=0) pops.splice(p,1);
+  }
+
+  updateCamera(dt);
+}
+
+function doTrick(){
+  var name = TRICKS[G.tricks % TRICKS.length];
+  G.tricks++;
+  G.combo++;
+  player.spinRate = (Math.random()<0.5?1:-1) * (7 + Math.random()*5);
+  player.flip = (player.flip? 0 : 1);
+  var base = 40;
+  G.comboScore += Math.round(base * zoneMult(player.x,player.y));
+  pop(player.x, player.y - player.z - 46, name + '!', '#ff5c39');
+  refreshHUD();
+}
+
+function landCombo(){
+  if(G.combo>0){
+    var gained = Math.round(G.comboScore * (1 + (G.combo-1)*0.5) * trickMult());
+    addScore(gained, player.x, player.y);
+    pop(player.x, player.y-30, '+'+gained+ (G.combo>1? '  x'+G.combo+' combo!':''), '#c6ff42');
+    gainXP(gained);
+  }
+  G.combo=0; G.comboScore=0;
+  refreshHUD();
+}
+
+function zoneMult(x,y){
+  var m=1;
+  for(var i=0;i<zones.length;i++){
+    if(Math.hypot(x-zones[i].x,y-zones[i].y) < zones[i].r) m = Math.max(m, zones[i].mult);
+  }
+  return m;
+}
+
+function addScore(n,x,y){
+  G.score += n;
+  if(G.score>G.best) G.best=G.score;
+  checkUnlocks();
+  refreshHUD();
+}
+function gainXP(n){
+  G.xp += n;
+  while(G.xp >= G.xpNeed){
+    G.xp -= G.xpNeed; G.level++; G.xpNeed = Math.round(G.xpNeed*1.5);
+    pop(player.x, player.y-60, 'BOARD UPGRADED  Lv '+G.level+'!', '#ffce4a');
+  }
+  refreshHUD();
+}
+
+function updatePeds(t){
+  for(var i=0;i<peds.length;i++){
+    var pd=peds[i];
+    pd.timer -= t;
+    if(pd.timer<=0){
+      pd.tx = 80 + Math.random()*(WORLD.w-160);
+      pd.ty = 80 + Math.random()*(WORLD.h-160);
+      pd.timer = 2 + Math.random()*3;
+    }
+    var dx=pd.tx-pd.x, dy=pd.ty-pd.y, d=Math.hypot(dx,dy)||1;
+    var sp = 34;
+    if(pd.boing>0){ pd.boing -= t; pd.x += pd.vx*t; pd.y += pd.vy*t; pd.vx*=0.92; pd.vy*=0.92; }
+    else { pd.x += (dx/d)*sp*t; pd.y += (dy/d)*sp*t; }
+    pd.x = Math.max(20,Math.min(WORLD.w-20,pd.x));
+    pd.y = Math.max(20,Math.min(WORLD.h-20,pd.y));
+
+    // interaction with player
+    var pdx = player.x-pd.x, pdy=player.y-pd.y, pdd=Math.hypot(pdx,pdy);
+    if(pdd < 34){
+      if(player.z > 26){
+        // airborne -> hop over
+        if(!pd.hopped){
+          pd.hopped=true;
+          addScore(15, pd.x, pd.y);
+          pop(pd.x, pd.y-40, 'HOP! +15', '#37d6e6');
+        }
+      } else if(player.onGround){
+        // bump
+        if(S.bouncy){
+          var bd = Math.hypot(pdx,pdy)||1;
+          pd.vx = -(pdx/bd)*260; pd.vy=-(pdy/bd)*260; pd.boing=0.6;
+          pop(pd.x,pd.y-34,'BOING!','#ff5c39');
+        } else {
+          player.vx *= -0.3; player.vy *= -0.3;
+          if(G.combo>0){ pop(player.x,player.y-30,'bailed!','#ff5c39'); G.combo=0; G.comboScore=0; refreshHUD(); }
+        }
+      }
+    } else { pd.hopped=false; }
+  }
+}
+
+/* Camera */
+var cam = { x:0, y:0 };
+function updateCamera(dt){
+  var tx = player.x - VW/2;
+  var ty = (player.y - player.z) - VH/2;
+  var k = reduceMotion ? 1 : Math.min(1, 6*dt);
+  cam.x += (tx-cam.x)*k; cam.y += (ty-cam.y)*k;
+}
+
+/* =====================================================================
+   7. Render
+   ===================================================================== */
+function draw(){
+  // dusk sky
+  var g = ctx.createLinearGradient(0,0,0,VH);
+  g.addColorStop(0,'#241a44'); g.addColorStop(0.55,'#3a2a54'); g.addColorStop(1,'#5a3f5e');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+
+  ctx.save();
+  ctx.translate(-cam.x, -cam.y);
+
+  drawGround();
+  drawZones();
+  drawRamps();
+  if(!boardPickup.taken) drawPickup();
+  drawCrates();
+
+  // sort drawables by y (+z) for pseudo-depth
+  var draws = [];
+  for(var i=0;i<peds.length;i++) draws.push({y:peds[i].y, fn:(function(pd){return function(){drawPed(pd);};})(peds[i])});
+  draws.push({y:player.y, fn:drawPlayer});
+  draws.sort(function(a,b){return a.y-b.y;});
+  for(var d=0;d<draws.length;d++) draws[d].fn();
+
+  drawPops();
+  ctx.restore();
+}
+
+function drawGround(){
+  // concrete plaza
+  ctx.fillStyle = '#6f6a7d';
+  ctx.fillRect(0,0,WORLD.w,WORLD.h);
+  // tile grid
+  ctx.strokeStyle = '#00000018'; ctx.lineWidth=2;
+  ctx.beginPath();
+  for(var x=0;x<=WORLD.w;x+=120){ ctx.moveTo(x,0); ctx.lineTo(x,WORLD.h); }
+  for(var y=0;y<=WORLD.h;y+=120){ ctx.moveTo(0,y); ctx.lineTo(WORLD.w,y); }
+  ctx.stroke();
+  // border wall
+  ctx.strokeStyle = '#2a2436'; ctx.lineWidth=16;
+  ctx.strokeRect(8,8,WORLD.w-16,WORLD.h-16);
+}
+
+function drawZones(){
+  for(var i=0;i<zones.length;i++){
+    var z=zones[i];
+    var grd=ctx.createRadialGradient(z.x,z.y,10,z.x,z.y,z.r);
+    grd.addColorStop(0,'#37d6e630'); grd.addColorStop(1,'#37d6e600');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,7); ctx.fill();
+    ctx.strokeStyle='#37d6e688'; ctx.lineWidth=3; ctx.setLineDash([10,10]);
+    ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#dffbff'; ctx.font='800 15px ui-sans-serif,system-ui';
+    ctx.textAlign='center'; ctx.fillText('TRICK ZONE  x'+z.mult, z.x, z.y-z.r+22);
+  }
+}
+
+function drawRamps(){
+  for(var i=0;i<ramps.length;i++){
+    var r=ramps[i]; ctx.save(); ctx.translate(r.x,r.y); ctx.rotate(r.dir);
+    // ramp body
+    var grd=ctx.createLinearGradient(-r.len/2,0,r.len/2,0);
+    grd.addColorStop(0,'#ff5c39'); grd.addColorStop(1,'#ffce4a');
+    ctx.fillStyle=grd;
+    ctx.beginPath();
+    ctx.moveTo(-r.len/2,34); ctx.lineTo(r.len/2,-30); ctx.lineTo(r.len/2,34); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#00000022';
+    ctx.beginPath(); ctx.moveTo(-r.len/2,34); ctx.lineTo(r.len/2,34); ctx.lineTo(r.len/2,44); ctx.lineTo(-r.len/2,44); ctx.closePath(); ctx.fill();
+    // chevrons
+    ctx.strokeStyle='#ffffffaa'; ctx.lineWidth=4;
+    for(var c=-1;c<2;c++){ ctx.beginPath(); ctx.moveTo(c*34-8,20); ctx.lineTo(c*34+8,2); ctx.lineTo(c*34-8,-16); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+
+function drawPickup(){
+  var b=boardPickup, bob=Math.sin(b.t*3)*6;
+  drawShadow(b.x, b.y, 20, 0.28);
+  ctx.save(); ctx.translate(b.x, b.y-24+bob); ctx.rotate(-0.5);
+  drawBoardShape(0,0, boards[0].deck, boards[0].wheels, 1);
+  ctx.restore();
+  ctx.fillStyle='#c6ff42'; ctx.font='800 13px ui-sans-serif,system-ui'; ctx.textAlign='center';
+  ctx.fillText('▲ grab me', b.x, b.y-44+bob);
+}
+
+function drawCrates(){
+  for(var i=0;i<crates.length;i++){
+    var c=crates[i]; if(c.taken) continue;
+    var bob=Math.sin(c.t*2.4)*4;
+    drawShadow(c.x,c.y,16,0.25);
+    ctx.save(); ctx.translate(c.x, c.y-16+bob);
+    ctx.fillStyle='#ffce4a'; ctx.strokeStyle='#7a5a10'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.rect(-14,-14,28,28); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle='#a5761a'; ctx.beginPath(); ctx.moveTo(-14,0);ctx.lineTo(14,0);ctx.moveTo(0,-14);ctx.lineTo(0,14); ctx.stroke();
+    ctx.fillStyle='#7a5a10'; ctx.font='900 14px ui-sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('?',0,1); ctx.textBaseline='alphabetic';
+    ctx.restore();
+  }
+}
+
+function drawShadow(x,y,r,alpha){
+  ctx.fillStyle='rgba(0,0,0,'+alpha+')';
+  ctx.beginPath(); ctx.ellipse(x,y,r,r*0.42,0,0,7); ctx.fill();
+}
+
+function drawBoardShape(x,y,deck,wheels,scale){
+  ctx.save(); ctx.translate(x,y); ctx.scale(scale,scale);
+  ctx.fillStyle=wheels;
+  ctx.beginPath(); ctx.arc(-14,6,4,0,7); ctx.arc(14,6,4,0,7); ctx.fill();
+  ctx.fillStyle=deck;
+  roundRect(-22,-6,44,10,5); ctx.fill();
+  ctx.fillStyle='#ffffff33'; roundRect(-22,-6,44,3,3); ctx.fill();
+  ctx.restore();
+}
+
+function drawPed(pd){
+  drawShadow(pd.x, pd.y, 12, 0.3);
+  var col = 'hsl('+pd.hue+' 45% 62%)';
+  ctx.save(); ctx.translate(pd.x, pd.y);
+  // legs
+  ctx.strokeStyle='#2a2436'; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-4,-2); ctx.lineTo(-5,-14); ctx.moveTo(4,-2); ctx.lineTo(5,-14); ctx.stroke();
+  // body
+  ctx.fillStyle=col; roundRect(-9,-30,18,20,7); ctx.fill();
+  // head
+  ctx.fillStyle='#f0c9a0'; ctx.beginPath(); ctx.arc(0,-38,7,0,7); ctx.fill();
+  ctx.restore();
+}
+
+function drawPlayer(){
+  var px=player.x, py=player.y, z=player.z;
+  // shadow shrinks with height
+  var sh = Math.max(0.08, 0.32 - z*0.0016);
+  drawShadow(px, py, 15 - Math.min(9,z*0.05), sh);
+
+  ctx.save();
+  ctx.translate(px, py - z);
+  // spin/flip for tricks
+  if(!player.onGround && (player.spin||player.flip)){
+    ctx.rotate(player.spin*0.12);
+    var fx = player.flip ? Math.cos(player.spin*0.5) : 1;
+    ctx.scale(fx<0?-1:1,1);
+  }
+
+  // board (only when riding)
+  if(player.riding){
+    ctx.save(); ctx.rotate(player.face + Math.PI/2);
+    drawBoardShape(0,10, boards[sel.board].deck, boards[sel.board].wheels, 1);
+    ctx.restore();
+  }
+  // legs
+  ctx.strokeStyle='#2a2436'; ctx.lineWidth=5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-5,-4); ctx.lineTo(-6,-18); ctx.moveTo(5,-4); ctx.lineTo(6,-18); ctx.stroke();
+  // body (outfit color)
+  ctx.fillStyle=outfits[sel.outfit].body;
+  roundRect(-10,-38,20,24,8); ctx.fill();
+  ctx.fillStyle='#ffffff26'; roundRect(-10,-38,20,6,6); ctx.fill();
+  // head
+  ctx.fillStyle='#f3ceac'; ctx.beginPath(); ctx.arc(0,-46,8,0,7); ctx.fill();
+  // cap
+  ctx.fillStyle=boards[sel.board].deck;
+  ctx.beginPath(); ctx.arc(0,-48,9,Math.PI,0); ctx.fill();
+  ctx.fillRect(-9,-49,18,3);
+  ctx.restore();
+}
+
+function drawPops(){
+  ctx.textAlign='center';
+  for(var i=0;i<pops.length;i++){
+    var p=pops[i];
+    ctx.globalAlpha = Math.max(0,Math.min(1,p.life));
+    ctx.font='900 18px ui-sans-serif,system-ui';
+    ctx.lineWidth=4; ctx.strokeStyle='#00000088'; ctx.strokeText(p.text,p.x,p.y);
+    ctx.fillStyle=p.color; ctx.fillText(p.text,p.x,p.y);
+  }
+  ctx.globalAlpha=1;
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+/* =====================================================================
+   8. Main loop
+   ===================================================================== */
+var last = 0, running=true;
+function frame(ts){
+  if(!last) last=ts;
+  var dt = Math.min(0.05, (ts-last)/1000); last=ts;
+  if(running && !introOpen) update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* =====================================================================
+   9. HUD + Studio wiring
+   ===================================================================== */
+function refreshHUD(){
+  document.getElementById('hScore').textContent = G.score;
+  document.getElementById('hLevel').textContent = player.riding ? G.level : '–';
+  document.getElementById('hXP').style.width = Math.round(G.xp/G.xpNeed*100)+'%';
+  var cw=document.getElementById('hComboWrap');
+  if(G.combo>0){ cw.classList.add('on'); document.getElementById('hCombo').textContent='x'+G.combo; }
+  else cw.classList.remove('on');
+}
+
+/* Studio open/close */
+var studio = document.getElementById('studio');
+var openBtn = document.getElementById('openStudio');
+openBtn.addEventListener('click', function(){ studio.classList.add('open'); openBtn.classList.add('hidden'); });
+studio.addEventListener('click', function(e){ if(e.target===studio){} });
+// close by clicking outside on the canvas
+document.getElementById('stage').addEventListener('pointerdown', function(){
+  if(studio.classList.contains('open')){ studio.classList.remove('open'); openBtn.classList.remove('hidden'); }
+});
+
+/* Tabs */
+var tabs = document.querySelectorAll('.tab');
+tabs.forEach(function(tb){
+  tb.addEventListener('click', function(){
+    tabs.forEach(function(x){x.classList.remove('active');});
+    tb.classList.add('active');
+    document.querySelectorAll('.pane').forEach(function(p){
+      p.classList.toggle('active', p.getAttribute('data-pane')===tb.getAttribute('data-tab'));
+    });
+  });
+});
+
+/* Sliders */
+function bindSlider(id, valId, key, fmt, onset){
+  var el=document.getElementById(id), out=document.getElementById(valId);
+  function show(){ out.textContent = fmt ? fmt(S[key]) : S[key]; }
+  el.value = S[key];
+  el.addEventListener('input', function(){
+    S[key] = parseFloat(el.value); show(); if(onset) onset(); save();
+  });
+  show();
+}
+bindSlider('sJump','vJump','jump', function(v){return Math.round(v);});
+bindSlider('sAir','vAir','air', function(v){return Math.round(v)+'%';});
+bindSlider('sSpeed','vSpeed','speed', function(v){return Math.round(v);});
+bindSlider('sGrip','vGrip','grip', function(v){return Math.round(v)+'%';});
+bindSlider('sPeople','vPeople','people', function(v){return Math.round(v);}, function(){ setPeople(S.people); });
+
+/* Toggles */
+function bindToggle(id, key){
+  var el=document.getElementById(id);
+  function show(){ el.classList.toggle('on', !!S[key]); }
+  el.addEventListener('click', function(){ S[key]=!S[key]; show(); save(); });
+  show();
+}
+bindToggle('tSlomo','slomo'); bindToggle('tBouncy','bouncy'); bindToggle('tMega','mega');
+
+document.getElementById('resetFeel').addEventListener('click', function(){
+  ['jump','air','speed','grip','people','slomo','bouncy','mega'].forEach(function(k){ S[k]=DEFAULTS[k]; });
+  document.getElementById('sJump').value=S.jump; document.getElementById('sAir').value=S.air;
+  document.getElementById('sSpeed').value=S.speed; document.getElementById('sGrip').value=S.grip;
+  document.getElementById('sPeople').value=S.people;
+  ['vJump','vAir','vSpeed','vGrip','vPeople'].forEach(function(){});
+  document.getElementById('vJump').textContent=Math.round(S.jump);
+  document.getElementById('vAir').textContent=Math.round(S.air)+'%';
+  document.getElementById('vSpeed').textContent=Math.round(S.speed);
+  document.getElementById('vGrip').textContent=Math.round(S.grip)+'%';
+  document.getElementById('vPeople').textContent=Math.round(S.people);
+  document.getElementById('tSlomo').classList.remove('on');
+  document.getElementById('tBouncy').classList.remove('on');
+  document.getElementById('tMega').classList.remove('on');
+  setPeople(S.people); save();
+});
+
+/* Style swatches */
+function buildSwatches(){
+  var bs=document.getElementById('boardSwatches'); bs.innerHTML='';
+  boards.forEach(function(b,i){
+    var el=document.createElement('button');
+    el.className='swatch'+(i===sel.board?' sel':'')+(G.best<b.need?' locked':'');
+    el.style.background='linear-gradient(135deg,'+b.deck+','+b.wheels+')';
+    el.innerHTML = (G.best<b.need? '<span class="lock">🔒</span>' : '') + '<span>'+b.name+'</span>';
+    el.title = G.best<b.need ? ('Unlocks at '+b.need+' pts') : b.name;
+    el.addEventListener('click', function(){
+      if(G.best<b.need){ note('That board unlocks at '+b.need+' points. Land more tricks!'); return; }
+      sel.board=i; buildSwatches(); save();
+    });
+    bs.appendChild(el);
+  });
+  var os=document.getElementById('outfitSwatches'); os.innerHTML='';
+  outfits.forEach(function(o,i){
+    var el=document.createElement('button');
+    el.className='swatch'+(i===sel.outfit?' sel':'')+(G.best<o.need?' locked':'');
+    el.style.background=o.body;
+    el.innerHTML = (G.best<o.need? '<span class="lock">🔒</span>' : '') + '<span>'+o.name+'</span>';
+    el.title = G.best<o.need ? ('Unlocks at '+o.need+' pts') : o.name;
+    el.addEventListener('click', function(){
+      if(G.best<o.need){ note('That outfit unlocks at '+o.need+' points!'); return; }
+      sel.outfit=i; buildSwatches(); save();
+    });
+    os.appendChild(el);
+  });
+}
+function note(msg){ document.getElementById('unlockNote').textContent=msg; }
+
+function checkUnlocks(){
+  // pop a message when something new becomes available
+  boards.forEach(function(b){ if(b.need>0 && G.best>=b.need && !b._u){ b._u=true; pop(player.x,player.y-70,'NEW BOARD: '+b.name+'!','#ffce4a'); buildSwatches(); } });
+  outfits.forEach(function(o){ if(o.need>0 && G.best>=o.need && !o._u){ o._u=true; pop(player.x,player.y-70,'NEW OUTFIT: '+o.name+'!','#ffce4a'); buildSwatches(); } });
+}
+
+/* =====================================================================
+   10. Ideas (saved to localStorage)
+   ===================================================================== */
+var STORE='mateoSkate.v1';
+function save(){
+  try{
+    localStorage.setItem(STORE, JSON.stringify({
+      S:S, sel:sel, best:G.best,
+      ideas:collectIdeas()
+    }));
+  }catch(e){}
+}
+function collectIdeas(){
+  return {
+    trick:document.getElementById('ideaTrick').value,
+    place:document.getElementById('ideaPlace').value,
+    look:document.getElementById('ideaLook').value,
+    wall:ideaWall
+  };
+}
+var ideaWall=[];
+function load(){
+  try{
+    var raw=localStorage.getItem(STORE); if(!raw) return;
+    var d=JSON.parse(raw);
+    if(d.S) Object.assign(S,d.S);
+    if(d.sel) Object.assign(sel,d.sel);
+    if(typeof d.best==='number') G.best=d.best;
+    if(d.ideas){
+      document.getElementById('ideaTrick').value=d.ideas.trick||'';
+      document.getElementById('ideaPlace').value=d.ideas.place||'';
+      document.getElementById('ideaLook').value=d.ideas.look||'';
+      ideaWall = d.ideas.wall||[];
+    }
+  }catch(e){}
+}
+['ideaTrick','ideaPlace','ideaLook'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', save);
+});
+function renderWall(){
+  var list=document.getElementById('ideaList'); list.innerHTML='';
+  ideaWall.forEach(function(txt,i){
+    var el=document.createElement('div'); el.className='idea';
+    var span=document.createElement('span'); span.textContent=txt; el.appendChild(span);
+    var del=document.createElement('button'); del.textContent='✕'; del.title='remove';
+    del.addEventListener('click', function(){ ideaWall.splice(i,1); renderWall(); save(); });
+    el.appendChild(del); list.appendChild(el);
+  });
+}
+function addIdea(){
+  var inp=document.getElementById('ideaInput'); var v=inp.value.trim();
+  if(!v) return; ideaWall.unshift(v); inp.value=''; renderWall(); save();
+}
+document.getElementById('ideaAdd').addEventListener('click', addIdea);
+document.getElementById('ideaInput').addEventListener('keydown', function(e){ if(e.key==='Enter') addIdea(); });
+
+var sparks = [
+  'What happens when you land a REALLY big trick? A sound? Confetti? Slow-mo?',
+  'If your board could be alive, what would it say when you crash?',
+  'Invent a secret area. How do you find it? What makes it special?',
+  'What is the hardest trick in the game called, and who can do it?',
+  'Should there be a friend skating with you? What can they do?',
+  'What weather would make skating cooler — rain? sunset? night with neon?',
+  'Design a boss ramp: the biggest ramp in the world. What is it shaped like?',
+  'What do you unlock at 10,000 points that makes everyone go WOW?',
+  'If people in the plaza could react to your tricks, what would they do?',
+  'Make up a rival skater. What do they wear and what is their move?'
+];
+var sparkI=0;
+function showSpark(){ document.getElementById('spark').textContent = sparks[sparkI%sparks.length]; sparkI++; }
+document.getElementById('sparkBtn').addEventListener('click', showSpark);
+
+/* =====================================================================
+   11. Intro
+   ===================================================================== */
+var introOpen=true;
+document.getElementById('startBtn').addEventListener('click', function(){
+  document.getElementById('intro').classList.add('gone');
+  introOpen=false; last=0;
+});
+
+/* =====================================================================
+   12. Boot
+   ===================================================================== */
+load();
+setPeople(S.people);
+// re-sync slider DOM to any loaded values
+document.getElementById('sJump').value=S.jump; document.getElementById('vJump').textContent=Math.round(S.jump);
+document.getElementById('sAir').value=S.air; document.getElementById('vAir').textContent=Math.round(S.air)+'%';
+document.getElementById('sSpeed').value=S.speed; document.getElementById('vSpeed').textContent=Math.round(S.speed);
+document.getElementById('sGrip').value=S.grip; document.getElementById('vGrip').textContent=Math.round(S.grip)+'%';
+document.getElementById('sPeople').value=S.people; document.getElementById('vPeople').textContent=Math.round(S.people);
+document.getElementById('tSlomo').classList.toggle('on',!!S.slomo);
+document.getElementById('tBouncy').classList.toggle('on',!!S.bouncy);
+document.getElementById('tMega').classList.toggle('on',!!S.mega);
+buildSwatches(); renderWall(); showSpark(); refreshHUD();
+// mark already-unlocked so we don't spam "new" popups for stuff earned before
+boards.forEach(function(b){ if(G.best>=b.need) b._u=true; });
+outfits.forEach(function(o){ if(G.best>=o.need) o._u=true; });
+
+})();
+</script>
+</body>
+</html>

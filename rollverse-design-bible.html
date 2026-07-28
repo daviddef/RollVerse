@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rollverse — Game Design Bible</title>
+<meta name="color-scheme" content="dark light" />
+<body>
+<style>
+  :root{
+    --ink:#0f0d17; --panel:#181426; --panel-2:#211b33; --line:#332a4d;
+    --text:#efeafc; --muted:#a79fc4; --faint:#6f6790;
+    --coral:#ff5c39; --volt:#c6ff42; --cyan:#37d6e6; --gold:#ffce4a; --violet:#a583ff;
+    --real:#37d6e6; --design:#c6ff42;
+    --radius:16px; --maxw:1080px;
+    --shadow:0 18px 44px -20px #000c;
+  }
+  :root[data-theme="light"]{
+    --ink:#f4f0fb; --panel:#ffffff; --panel-2:#f6f2fc; --line:#e6def4;
+    --text:#1d1633; --muted:#5f568a; --faint:#8a80ad; --shadow:0 18px 44px -24px #5a409033;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --ink:#f4f0fb; --panel:#ffffff; --panel-2:#f6f2fc; --line:#e6def4;
+      --text:#1d1633; --muted:#5f568a; --faint:#8a80ad; --shadow:0 18px 44px -24px #5a409033;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
+  body{margin:0;background:var(--ink);color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.6}
+  .display{font-weight:900;letter-spacing:-.02em;text-transform:uppercase;line-height:.95;text-wrap:balance}
+  .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+  a{color:var(--cyan)}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+
+  /* Nav */
+  nav{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--ink) 88%,transparent);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;gap:10px;height:56px;overflow-x:auto}
+  nav .brand{font-weight:900;letter-spacing:-.01em;white-space:nowrap;margin-right:6px}
+  nav .brand b{color:var(--coral)}
+  nav a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:700;white-space:nowrap;
+    padding:6px 10px;border-radius:999px}
+  nav a:hover{color:var(--text);background:var(--panel-2)}
+
+  /* Hero */
+  header{position:relative;overflow:hidden;border-bottom:1px solid var(--line);
+    background:radial-gradient(120% 90% at 80% -10%,#3a2a5e,transparent 60%),
+               radial-gradient(90% 80% at 0% 0%,#42284d,transparent 55%)}
+  .hero{display:grid;grid-template-columns:1.4fr .9fr;gap:30px;align-items:center;padding:54px 0 48px}
+  @media(max-width:760px){ .hero{grid-template-columns:1fr;text-align:left} }
+  .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan);font-weight:800}
+  .hero h1{font-size:clamp(46px,9vw,92px);margin:.12em 0 .1em}
+  .hero h1 b{color:var(--coral)}
+  .hero p{font-size:18px;color:var(--muted);max-width:52ch;margin:0}
+  .hero-icon{display:flex;justify-content:center}
+  .hero-icon svg{width:min(260px,64vw);height:auto;border-radius:26%;box-shadow:var(--shadow)}
+  .tagline{margin-top:14px;font-weight:800;color:var(--volt);font-size:15px}
+
+  section{padding:52px 0;border-bottom:1px solid var(--line)}
+  h2.sec{font-size:clamp(26px,4vw,40px);margin:0 0 6px}
+  .sec-no{color:var(--coral);font-size:14px;font-weight:900;letter-spacing:.1em}
+  .lead{color:var(--muted);font-size:17px;max-width:66ch;margin:8px 0 26px}
+  h3{font-size:20px;margin:30px 0 10px}
+  h4{font-size:15px;margin:18px 0 6px;letter-spacing:.02em}
+  p{max-width:70ch}
+
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:760px){ .g2,.g3{grid-template-columns:1fr} }
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .card h4{margin-top:0}
+  .card.k{border-top:3px solid var(--coral)}
+
+  .pill{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .pill.real{color:#04222a;background:var(--real);border-color:var(--real)}
+  .pill.design{color:#182600;background:var(--design);border-color:var(--design)}
+
+  .callout{border-left:3px solid var(--line);padding:12px 16px;border-radius:0 12px 12px 0;
+    background:var(--panel-2);margin:16px 0}
+  .callout.real{border-color:var(--real)} .callout.design{border-color:var(--design)}
+  .callout .lbl{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+  .callout.real .lbl{color:var(--real)} .callout.design .lbl{color:var(--design)}
+  .callout p{margin:4px 0 0}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin:14px 0}
+  table{border-collapse:collapse;width:100%;min-width:520px;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--panel-2);font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:800;position:sticky;top:0}
+  tr:last-child td{border-bottom:none}
+  td b{color:var(--text)}
+
+  ul.clean{margin:8px 0;padding-left:18px} ul.clean li{margin:5px 0;color:var(--muted)}
+  ul.clean li b{color:var(--text)}
+
+  .tier{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;padding:2px 8px;border-radius:6px;margin-right:6px}
+  .t1{background:#1f3a1f;color:#b6f06a} .t2{background:#123540;color:#7fe0ef}
+  .t3{background:#3a2f12;color:#ffd873} .t4{background:#3a1a2a;color:#ff9ec2} .t5{background:#2a1640;color:#c9a6ff}
+  :root[data-theme="light"] .t1{background:#e6f6d6;color:#3a6b12}
+  :root[data-theme="light"] .t2{background:#d6f2f8;color:#0f6070}
+  :root[data-theme="light"] .t3{background:#fbeecd;color:#8a6410}
+  :root[data-theme="light"] .t4{background:#fbe0ec;color:#a0316a}
+  :root[data-theme="light"] .t5{background:#eee0fb;color:#6a41a0}
+
+  .chip-row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+  .chip{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600}
+  .chip b{color:var(--coral)}
+
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:800;font-size:13px}
+  .flow .step{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:7px 11px}
+  .flow .arr{color:var(--coral)}
+
+  .name-hero{font-size:clamp(34px,7vw,64px);margin:0}
+  .name-hero b{color:var(--coral)}
+  .alt{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line)}
+  .alt:last-child{border-bottom:none}
+  .alt .n{font-weight:900;font-size:17px} .alt .why{color:var(--muted);font-size:14px;text-align:right;max-width:60%}
+
+  .icons{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+  @media(max-width:620px){ .icons{grid-template-columns:1fr} }
+  .icon-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;text-align:center}
+  .icon-card svg{width:150px;height:150px;border-radius:23%;box-shadow:var(--shadow)}
+  .icon-sizes{display:flex;gap:12px;align-items:center;justify-content:center;margin-top:14px}
+  .icon-sizes svg{border-radius:23%;box-shadow:none}
+  .s60{width:60px;height:60px} .s40{width:40px;height:40px} .s28{width:28px;height:28px}
+
+  footer{padding:40px 0 70px;color:var(--faint);font-size:13px}
+  .badge{display:inline-block;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:2px 8px;font-size:12px;font-weight:700;color:var(--muted)}
+
+  /* map */
+  .map svg{width:100%;height:auto;max-width:720px;display:block;margin:6px auto}
+</style>
+
+<nav><div class="wrap">
+  <span class="brand"><b>ROLL</b>VERSE</span>
+  <a href="#name">Name</a>
+  <a href="#icon">Icon</a>
+  <a href="#pillars">Pillars</a>
+  <a href="#world">World</a>
+  <a href="#people">People</a>
+  <a href="#rideable">Rideable system</a>
+  <a href="#tricks">Tricks</a>
+  <a href="#gear">Gear</a>
+  <a href="#electric">Scooters + electric</a>
+  <a href="#progression">Progression</a>
+  <a href="#competitions">Competitions</a>
+  <a href="#roadmap">Roadmap</a>
+</div></nav>
+
+<header><div class="wrap">
+  <div class="hero">
+    <div>
+      <div class="eyebrow">Game Design Bible · v0.1 · for Mateo</div>
+      <h1 class="display">Roll<b>verse</b></h1>
+      <p>A free-play world of connected skate parks you roll between — earn your board, learn real tricks, upgrade your setup, and discover new places to shred. Built from day one to grow into scooters and electric rides.</p>
+      <div class="tagline">Skate anything. Anywhere. Any way you roll.</div>
+    </div>
+    <div class="hero-icon" aria-hidden="true" id="heroIconSlot"></div>
+  </div>
+</div></header>
+
+<main>
+
+<!-- ============ NAME ============ -->
+<section id="name"><div class="wrap">
+  <div class="sec-no">01</div><h2 class="sec display">The Name</h2>
+  <p class="lead">It has to work when the game is just skateboards — and still work the day it has scooters and electric boards. So the name shouldn't say "skate." It should say <em>roll</em>.</p>
+
+  <div class="grid g2">
+    <div class="card k">
+      <span class="pill design">Recommended</span>
+      <p class="name-hero display">Roll<b>verse</b></p>
+      <ul class="clean">
+        <li><b>A universe of parks.</b> The "-verse" is literally the connected world of districts you travel between.</li>
+        <li><b>Rolls with anything.</b> Skateboard, scooter, e-board, e-scooter — they all <em>roll</em>. No rename needed, ever.</li>
+        <li><b>Kid-sayable, brandable, .com-ish energy.</b> One punchy word, easy to chant.</li>
+        <li><b>Icon-friendly.</b> A wheel = the universal symbol for the whole game (see next section).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Strong alternates</h4>
+      <div class="alt"><span class="n">Freewheel</span><span class="why">Free-play + wheels; calm, cool, universal. Slightly less "world."</span></div>
+      <div class="alt"><span class="n">Grind City</span><span class="why">Skate-flavored + city (matches the roads/parks world). Leans skate-only.</span></div>
+      <div class="alt"><span class="n">Rollpark</span><span class="why">Says "parks you roll in" plainly. A touch generic.</span></div>
+      <div class="alt"><span class="n">Shred</span><span class="why">Pure attitude, one syllable. Very skate; harder to own/search.</span></div>
+      <div class="alt"><span class="n">Sidewalk</span><span class="why">Warm, wholesome, city-street feel. Understated for a kid.</span></div>
+    </div>
+  </div>
+  <div class="callout design"><span class="lbl">Design note</span>
+    <p>Whatever we pick, keep a <b>sub-title slot</b> ("Rollverse: Street Season") so seasons/updates get names without touching the brand. Let Mateo do the final gut-check out loud — the right name is the one he wants to say to his friends.</p>
+  </div>
+</div></section>
+
+<!-- ============ ICON ============ -->
+<section id="icon"><div class="wrap">
+  <div class="sec-no">02</div><h2 class="sec display">The Icon</h2>
+  <p class="lead">One idea does all the work: <b>a wheel</b>. It reads instantly, it's true to every rideable in the game (skate, scooter, electric), and it still looks like something at 40&nbsp;px on a home screen. Two takes below — same brand, same dusk-park palette as the game.</p>
+
+  <div class="icons">
+    <div class="icon-card">
+      <div id="iconA"></div>
+      <h4 style="margin-bottom:2px">Orbit Wheel</h4>
+      <p style="color:var(--muted);font-size:14px;margin:2px auto 0;max-width:34ch">The wheel + an orbit ring = the "-verse" of connected parks. More story, best at larger sizes.</p>
+      <div class="icon-sizes" id="iconAset"></div>
+    </div>
+    <div class="icon-card">
+      <div id="iconB"></div>
+      <h4 style="margin-bottom:2px">Bold Wheel</h4>
+      <p style="color:var(--muted);font-size:14px;margin:2px auto 0;max-width:34ch">Higher contrast, one confident swoosh. Stays legible when tiny — the safer home-screen pick.</p>
+      <div class="icon-sizes" id="iconBset"></div>
+    </div>
+  </div>
+  <div class="callout design"><span class="lbl">Why a wheel</span>
+    <p>A board or a skater would lock the icon to skateboarding. A <b>bearing-style wheel</b> is the one part <em>every</em> rideable shares — so the brand mark survives the jump to scooters and electric with zero redraw. The cyan bearing balls double as a tiny "spark" that hints at the electric future.</p>
+  </div>
+</div></section>
+
+<!-- ============ PILLARS ============ -->
+<section id="pillars"><div class="wrap">
+  <div class="sec-no">03</div><h2 class="sec display">Design Pillars</h2>
+  <p class="lead">Five rules that keep every future decision pointed the same way.</p>
+  <div class="grid g3">
+    <div class="card k"><h4>1 · Free play first</h4><p style="color:var(--muted)">Roam, mess around, no timer. Goals are layered <em>on top</em> of the sandbox, never in place of it.</p></div>
+    <div class="card k"><h4>2 · Real, made friendly</h4><p style="color:var(--muted)">Real tricks, real gear, real physics feel — with big assists so a kid lands things and grins.</p></div>
+    <div class="card k"><h4>3 · One "rideable" system</h4><p style="color:var(--muted)">Skateboard, scooter, e-board are configs of one thing. New rides = data, not rewrites.</p></div>
+    <div class="card k"><h4>4 · The world is alive</h4><p style="color:var(--muted)">Roads, people, traffic. Precision matters — dodging a crowd is a skill, smashing it has consequences.</p></div>
+    <div class="card k"><h4>5 · Change → feel it now</h4><p style="color:var(--muted)">Tune a slider or swap a wheel and feel the difference instantly. Playing doubles as designing.</p></div>
+  </div>
+</div></section>
+
+<!-- ============ WORLD ============ -->
+<section id="world"><div class="wrap">
+  <div class="sec-no">04</div><h2 class="sec display">The World: Connected Parks</h2>
+  <p class="lead">The sweet spot for a kid is a hybrid of <span class="badge">Tony Hawk</span> (distinct themed parks) and <span class="badge">OlliOlli</span> (an overworld you travel) — <b>themed districts joined by short roads you actually skate</b>, not a menu. Unlocking a new district feels like an adventure, not a click.</p>
+
+  <div class="map" aria-label="Map of connected skate districts joined by roads">
+    <svg viewBox="0 0 720 380" role="img">
+      <defs>
+        <linearGradient id="road" x1="0" x2="1"><stop offset="0" stop-color="#4a3f6a"/><stop offset="1" stop-color="#5a4a7a"/></linearGradient>
+      </defs>
+      <!-- roads -->
+      <g stroke="url(#road)" stroke-width="14" stroke-linecap="round" fill="none" opacity=".8">
+        <path d="M360 190 L150 90"/><path d="M360 190 L560 80"/><path d="M360 190 L120 280"/>
+        <path d="M360 190 L580 290"/><path d="M360 190 L360 40"/>
+      </g>
+      <g stroke="#c6ff42" stroke-width="2" stroke-dasharray="3 10" stroke-linecap="round" fill="none" opacity=".6">
+        <path d="M360 190 L150 90"/><path d="M360 190 L560 80"/><path d="M360 190 L120 280"/>
+        <path d="M360 190 L580 290"/><path d="M360 190 L360 40"/>
+      </g>
+      <!-- hub -->
+      <g><circle cx="360" cy="190" r="46" fill="#ff5c39"/><text x="360" y="185" text-anchor="middle" fill="#1a0a06" font-size="13" font-weight="900">HUB</text><text x="360" y="200" text-anchor="middle" fill="#1a0a06" font-size="10" font-weight="700">The Plaza</text></g>
+      <!-- nodes -->
+      <g font-size="11" font-weight="800" text-anchor="middle">
+        <g><circle cx="150" cy="90" r="34" fill="#37d6e6"/><text x="150" y="88" fill="#04222a">Beach</text><text x="150" y="101" fill="#04222a" font-size="9">bowl/pool</text></g>
+        <g><circle cx="560" cy="80" r="34" fill="#a583ff"/><text x="560" y="78" fill="#1a0a2a">Marble</text><text x="560" y="91" fill="#1a0a2a" font-size="9">street</text></g>
+        <g><circle cx="120" cy="280" r="34" fill="#ffce4a"/><text x="120" y="278" fill="#3a2a12">Under-Bridge</text><text x="120" y="291" fill="#3a2a12" font-size="9">DIY</text></g>
+        <g><circle cx="580" cy="290" r="34" fill="#c6ff42"/><text x="580" y="288" fill="#182600">The Hills</text><text x="580" y="301" fill="#182600" font-size="9">downhill</text></g>
+        <g><circle cx="360" cy="40" r="34" fill="#ff9ec2"/><text x="360" y="38" fill="#3a0d20">Mega</text><text x="360" y="51" fill="#3a0d20" font-size="9">vert/big air</text></g>
+      </g>
+    </svg>
+  </div>
+
+  <h3>Each district = one real park "biome" (so each feels different to skate)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>District (theme)</th><th>Real archetype</th><th>Feels like</th><th>Key obstacles</th></tr>
+    <tr><td><b>Sunset Plaza</b> (hub)</td><td>Flow / hybrid park</td><td>Everything a little; the crossroads</td><td>Funbox, ledges, small quarters, manual pads</td></tr>
+    <tr><td><b>Beachside Bowl</b></td><td>Transition / bowl &amp; pool</td><td>Flowing, continuous, carve &amp; pump — no pushing</td><td>Bowl, pool w/ coping, quarter pipe, spine</td></tr>
+    <tr><td><b>Marble Blocks</b></td><td>Street plaza</td><td>Technical, stop-start, precision</td><td>Stairs, hubba, handrail, ledges, gaps</td></tr>
+    <tr><td><b>Under the Bridge</b></td><td>DIY / backyard concrete</td><td>Rough, handmade, secret lines — the "home base"</td><td>Mismatched transitions, snake run</td></tr>
+    <tr><td><b>The Hills</b></td><td>Downhill / hills</td><td>Speed, carving, terrain reading</td><td>Slopes, banks, road gaps (great for cruisers/e-boards)</td></tr>
+    <tr><td><b>Mega Yard</b></td><td>Vert / mega ramp</td><td>Aspirational big-air spectacle</td><td>Vert wall, mega ramp: roll-in → kicker → quarter</td></tr>
+  </table></div>
+
+  <div class="callout real"><span class="lbl">From research</span>
+    <p>Almost every real obstacle decomposes into just two engine verbs: <b>carve/pump on curves</b> and <b>grind/slide/manual on edges</b>. Nail those two and a ~20-piece obstacle palette (quarter, half, mini, bowl, spine, ledge, manual pad, funbox, pyramid, rail, flat bar, stairs, hubba, bank, euro gap, kicker, pump track, snake run, mega ramp) covers the whole vocabulary — and doubles as a future <b>create-a-park</b> toolset.</p>
+  </div>
+</div></section>
+
+<!-- ============ PEOPLE / HEAT ============ -->
+<section id="people"><div class="wrap">
+  <div class="sec-no">05</div><h2 class="sec display">People, Roads &amp; the Heat System</h2>
+  <p class="lead">Mateo's rule: <b>don't smash into people.</b> This is what makes the living world matter — it turns "jump over people" from a gimmick into a real skill, with real (funny) consequences.</p>
+
+  <div class="grid g2">
+    <div class="card">
+      <h4 style="color:var(--volt)">✔ Good contact = style</h4>
+      <ul class="clean">
+        <li><b>Ollie over</b> a pedestrian → "HOP! +style".</li>
+        <li><b>Near-miss weave</b> through a crowd → "Close call!" bonus.</li>
+        <li>Clean lines through busy areas build your combo instead of breaking it.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--coral)">✘ Bad contact = trouble</h4>
+      <ul class="clean">
+        <li><b>Smash a person</b> → lose points, break combo, gain <b>Heat</b>.</li>
+        <li>Heat cools down over time if you skate clean.</li>
+        <li>Fill the Heat meter → a <b>Security Guard / Park Ranger</b> gives chase.</li>
+        <li>Get caught → short, cartoon <b>"Skate Jail" timeout</b>, then released.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>The Heat meter (kid-friendly, slapstick — not GTA)</h3>
+  <div class="flow">
+    <span class="step">Clean skating</span><span class="arr">→</span>
+    <span class="step">Bump someone (+Heat)</span><span class="arr">→</span>
+    <span class="step">Meter fills</span><span class="arr">→</span>
+    <span class="step">Guard chase</span><span class="arr">→</span>
+    <span class="step">Caught = brief timeout</span><span class="arr">→</span>
+    <span class="step">Released, Heat reset</span>
+  </div>
+  <div class="callout design"><span class="lbl">Make it teach, not just punish</span>
+    <p>Add a <b>make-amends</b> path: after a bump, a quick "say sorry" tap or landing a cool trick charms the crowd and <em>lowers</em> Heat. So the lesson is "be careful around people — and if you mess up, make it right," not just "avoid humans." Roads add the same tension with <b>traffic</b>: skating a busy street is a dodge mini-game; nailing it clean = big style, botching it = Heat.</p>
+  </div>
+</div></section>
+
+<!-- ============ RIDEABLE SYSTEM ============ -->
+<section id="rideable"><div class="wrap">
+  <div class="sec-no">06</div><h2 class="sec display">The Rideable System <span class="pill design" style="vertical-align:middle">the adaptability engine</span></h2>
+  <p class="lead">This is the most important decision in the whole project. <b>Never hardcode "skateboard."</b> Everything you ride is one data-driven <span class="mono">Rideable</span> = shared base + a few swappable modules. Skateboards, scooters, e-boards and e-scooters become <em>configs</em>, so the expansion Mateo wants is adding data, not rebuilding the game.</p>
+
+  <h3>What every rideable shares (one core)</h3>
+  <div class="chip-row">
+    <span class="chip"><b>Wheels</b> size · hardness · grip</span>
+    <span class="chip"><b>Deck</b> width · length · weight · flex</span>
+    <span class="chip"><b>Momentum</b> speed · inertia</span>
+    <span class="chip"><b>Lean/carve</b> steering</span>
+    <span class="chip"><b>Terrain</b> grip · bumps · hills · air</span>
+    <span class="chip"><b>Landing</b> clean / sketchy / bail</span>
+    <span class="chip"><b>Trick score</b> air × rotation × clean × combo</span>
+  </div>
+
+  <h3>What differs (swappable modules — just four things really matter)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Module</th><th>Skateboard</th><th>Stunt Scooter</th><th>E-Board</th><th>E-Scooter</th></tr>
+    <tr><td><b>Speed up</b></td><td>Foot push</td><td>Foot push</td><td class="mono">Throttle</td><td class="mono">Throttle</td></tr>
+    <tr><td><b>Slow down</b></td><td>Foot / slide</td><td>Rear flex brake</td><td class="mono">Regen (remote)</td><td class="mono">Disc / drum / regen</td></tr>
+    <tr><td><b>Hands</b></td><td>Free</td><td class="mono">Hold bars</td><td>Free (remote)</td><td class="mono">Hold bars</td></tr>
+    <tr><td><b>Trick verb</b></td><td>Flips / shove-its (free-space)</td><td>Whips / barspins (pivot on bars)</td><td>Carve / slide lines</td><td>Jumps / bar tricks</td></tr>
+    <tr><td><b>Battery?</b></td><td>—</td><td>—</td><td class="mono">✔ manage Wh</td><td class="mono">✔ manage Wh</td></tr>
+  </table></div>
+
+  <div class="callout real"><span class="lbl">The whole abstraction in one line</span>
+    <p>Everything shares <b>wheels, a deck, momentum, terrain, and a "keep control + score the air" loop.</b> The only things that truly differ are <b>how you speed up</b> (push vs. throttle), <b>how you slow down</b> (foot/flex vs. regen/disc), <b>whether you're holding bars</b> (which flips the whole trick vocabulary from flips to whips), and <b>whether there's a battery to manage.</b> Model those four as modules and one system covers all four sports — plus future ones (onewheel, BMX, e-unicycle) drop in for free.</p>
+  </div>
+
+  <div class="callout design"><span class="lbl">Bonus: the "garage" is a teaching tool</span>
+    <p>Because parts are real and data-driven, a <b>garage screen</b> lets Mateo tune wheel hardness, truck tightness, board width — and <em>feel</em> the change on the next run. That's the same live-iteration idea as the current prototype's Studio, extended to real gear. Playing the game teaches real skateboarding.</p>
+  </div>
+</div></section>
+
+<!-- ============ TRICKS ============ -->
+<section id="tricks"><div class="wrap">
+  <div class="sec-no">07</div><h2 class="sec display">Real Tricks &amp; the Skill Tree</h2>
+  <p class="lead">The real trick <em>space</em> isn't a list — it's a small list <b>multiplied</b> by stance and rotation. That's what gives a skate game surprising depth from a handful of core moves. Everything below is real (verified), and ordered the way people actually learn.</p>
+
+  <div class="grid g2">
+    <div class="card">
+      <h4>Flip tricks <span class="pill real">real</span></h4>
+      <p style="color:var(--muted);font-size:14px;margin-top:0">Board flips/spins off the feet in free space.</p>
+      <div class="flow" style="font-size:12px">
+        <span class="step"><span class="tier t1">T1</span>Ollie</span><span class="arr">→</span>
+        <span class="step"><span class="tier t2">T2</span>Shove-it</span><span class="arr">→</span>
+        <span class="step"><span class="tier t2">T2</span>Kickflip</span><span class="arr">→</span>
+        <span class="step"><span class="tier t3">T3</span>Heelflip</span><span class="arr">→</span>
+        <span class="step"><span class="tier t3">T3</span>Varial flip</span><span class="arr">→</span>
+        <span class="step"><span class="tier t4">T4</span>360 flip (tre)</span><span class="arr">→</span>
+        <span class="step"><span class="tier t5">T5</span>Hardflip · Laser</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Grinds <span class="pill real">real</span> <span style="color:var(--faint);font-size:12px">(metal trucks contact)</span></h4>
+      <div class="flow" style="font-size:12px">
+        <span class="step"><span class="tier t1">T1</span>50-50</span><span class="arr">→</span>
+        <span class="step"><span class="tier t2">T2</span>5-0 · Nosegrind</span><span class="arr">→</span>
+        <span class="step"><span class="tier t3">T3</span>Crooked (K-grind)</span><span class="arr">→</span>
+        <span class="step"><span class="tier t4">T4</span>Smith · Feeble</span><span class="arr">→</span>
+        <span class="step"><span class="tier t5">T5</span>Overcrook · spin-outs</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Slides <span class="pill real">real</span> <span style="color:var(--faint);font-size:12px">(the deck contacts)</span></h4>
+      <div class="flow" style="font-size:12px">
+        <span class="step"><span class="tier t1">T1</span>Boardslide</span><span class="arr">→</span>
+        <span class="step"><span class="tier t2">T2</span>Noseslide</span><span class="arr">→</span>
+        <span class="step"><span class="tier t3">T3</span>Tailslide</span><span class="arr">→</span>
+        <span class="step"><span class="tier t3">T3</span>Lipslide</span><span class="arr">→</span>
+        <span class="step"><span class="tier t5">T5</span>Bluntslide · Darkslide</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Air &amp; grabs <span class="pill real">real</span> <span style="color:var(--faint);font-size:12px">(ramps/bowls)</span></h4>
+      <div class="flow" style="font-size:12px">
+        <span class="step"><span class="tier t1">T1</span>Drop-in · Pump</span><span class="arr">→</span>
+        <span class="step"><span class="tier t2">T2</span>Rock to fakie</span><span class="arr">→</span>
+        <span class="step"><span class="tier t3">T3</span>Indy · Mute · Melon</span><span class="arr">→</span>
+        <span class="step"><span class="tier t4">T4</span>Stalefish · Method</span><span class="arr">→</span>
+        <span class="step"><span class="tier t5">T5</span>Christ air · McTwist</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>The multiplier that creates depth</h3>
+  <ul class="clean">
+    <li><b>Stance ×4:</b> every flip exists as regular / fakie / switch / nollie (kickflip → nollie kickflip…).</li>
+    <li><b>Rotation:</b> frontside or backside, at 180 / 360 / 540.</li>
+    <li><b>Combine:</b> flip <em>into</em> a grind or slide ("kickflip backside tailslide"), spin <em>out</em> of it.</li>
+    <li><b>Combo grammar:</b> <span class="mono">[stance] [rotation] [flip] [obstacle trick] [exit]</span> — e.g. "switch frontside 360 kickflip".</li>
+  </ul>
+
+  <div class="callout real"><span class="lbl">Scoring, from the real games</span>
+    <p><b>Base value × combo multiplier.</b> Manuals and grinds are the <b>glue</b> that links tricks into one long line; a <b>revert→manual</b> connects ramp tricks together (the trick that made THPS combos endless). <b>Repeating</b> the same trick lowers its value (forces variety); <b>switch/nollie</b> scores more; a <b>bail wipes the uncommitted combo.</b> For young players: generous landing windows + auto-catch assists = they land things and keep grinning.</p>
+  </div>
+</div></section>
+
+<!-- ============ GEAR ============ -->
+<section id="gear"><div class="wrap">
+  <div class="sec-no">08</div><h2 class="sec display">Real Gear (that actually changes how you ride)</h2>
+  <p class="lead">Gear shouldn't be just skins. Real parts have real tradeoffs — so choosing a setup becomes a light strategy layer, and the game quietly teaches how skateboards work.</p>
+
+  <div class="grid g2">
+    <div class="card">
+      <h4>Deck width = the feel dial <span class="pill real">real</span></h4>
+      <div class="tablewrap"><table>
+        <tr><th>Width</th><th>Flips</th><th>Stable</th><th>Best for</th></tr>
+        <tr><td class="mono">7.5–7.9"</td><td>Fastest</td><td>Low</td><td>Tech street, small feet</td></tr>
+        <tr><td class="mono">8.0–8.25"</td><td>Fast</td><td>Medium</td><td>All-around (most popular)</td></tr>
+        <tr><td class="mono">8.5–9.0"</td><td>Slower</td><td>High</td><td>Ramps, bowls, big air</td></tr>
+      </table></div>
+    </div>
+    <div class="card">
+      <h4>Wheels: grip ↔ speed <span class="pill real">real</span></h4>
+      <ul class="clean">
+        <li><b>Diameter:</b> 50–54mm = light, quick, street; 60mm+ = fast, rolls over rough ground, cruising.</li>
+        <li><b>Durometer (hardness):</b> <span class="mono">78a–87a</span> soft = grippy &amp; smooth but slow; <span class="mono">99a–101a</span> hard = fast &amp; slides easy but chattery.</li>
+        <li><b>In game:</b> soft wheels help The Hills &amp; rough roads; hard wheels win in the park.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Trucks: turn ↔ stability <span class="pill real">real</span></h4>
+      <ul class="clean">
+        <li><b>Match width</b> to the deck (axle within ~¼" of deck width).</li>
+        <li><b>Tighter kingpin / harder bushings</b> = stable at speed; <b>looser / softer</b> = carvy and quick to turn.</li>
+        <li><b>Low trucks</b> suit flips + small wheels; <b>high trucks</b> clear big cruiser wheels.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Bearings: the honest truth <span class="pill real">real</span></h4>
+      <ul class="clean">
+        <li>All skate bearings are the <b>608</b> size (8×22×7mm).</li>
+        <li><b>ABEC ratings are mostly marketing</b> for skating — they measure factory precision, not durability or real-world speed. Bones skips ABEC entirely with its own "Skate Rated" standard.</li>
+        <li><b>In game:</b> model bearings as "how long you keep rolling / how smooth," and let dirt &amp; water matter more than the ABEC number — a fun, true detail.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Boards as product categories</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Category</th><th>Setup</th><th>Great at</th><th>Tradeoff</th></tr>
+    <tr><td><b>Street popsicle</b></td><td>7.75–8.5", small hard wheels, low trucks</td><td>Flips, ledges, stairs, park</td><td>Rough on cracks, low top speed</td></tr>
+    <tr><td><b>Cruiser</b></td><td>Shaped deck + kicktail, soft wheels</td><td>Getting around, comfort</td><td>Not for tech tricks</td></tr>
+    <tr><td><b>Old-school / pool</b></td><td>Wide 8.5–9.5"+ shaped, big kicktail</td><td>Bowls, pools, vert, carving</td><td>Heavy, not for modern flips</td></tr>
+    <tr><td><b>Longboard</b></td><td>Long deck, big soft wheels, reverse-kingpin trucks</td><td>Cruising, carving, downhill speed</td><td>Bulky, no flip tricks</td></tr>
+    <tr><td><b>Penny / plastic</b></td><td>~22–27" plastic, narrow trucks, soft wheels</td><td>Ultra-portable short hops</td><td>Tiny, tippy, not for tricks</td></tr>
+  </table></div>
+</div></section>
+
+<!-- ============ ELECTRIC ============ -->
+<section id="electric"><div class="wrap">
+  <div class="sec-no">09</div><h2 class="sec display">Scooters &amp; Electric (the expansion)</h2>
+  <p class="lead">Because of the Rideable System, these slot in as new unlockable categories with their own districts and trick trees — no re-architecture. Here's what makes each one <em>feel</em> distinct.</p>
+
+  <div class="grid g3">
+    <div class="card k">
+      <h4>Stunt scooter <span class="pill real">real</span></h4>
+      <p style="color:var(--muted);font-size:14px">You <b>hold the bars</b>, so tricks are <b>whips &amp; spins around an anchor</b>, not free-space flips.</p>
+      <div class="flow" style="font-size:12px">
+        <span class="step"><span class="tier t1">T1</span>Bunny hop</span><span class="arr">→</span>
+        <span class="step"><span class="tier t2">T2</span>Bar spin</span><span class="arr">→</span>
+        <span class="step"><span class="tier t3">T3</span>Tailwhip</span><span class="arr">→</span>
+        <span class="step"><span class="tier t4">T4</span>Bri flip</span><span class="arr">→</span>
+        <span class="step"><span class="tier t5">T5</span>Flair · Buttercup</span>
+      </div>
+      <p style="color:var(--faint);font-size:12.5px;margin-bottom:0">Parts: bars, clamp, deck, fork, 110mm PU wheels, flex brake. Tuning: compression (SCS strongest, IHC/HIC lightest).</p>
+    </div>
+    <div class="card k">
+      <h4>Electric skateboard <span class="pill real">real</span></h4>
+      <p style="color:var(--muted);font-size:14px"><b>No pushing.</b> Throttle + regen braking. The skill is <b>speed, carving &amp; hills</b>, not flips.</p>
+      <ul class="clean" style="font-size:13px">
+        <li>Hub vs belt motors; battery in <b>Wh</b> sets range, voltage sets top speed.</li>
+        <li>Ride modes: Eco → Sport → Pro (throttle &amp; brake strength).</li>
+        <li>Real range: ~18–40 mph, ~7–40 miles. New failure states: battery %, speed wobble.</li>
+      </ul>
+      <p style="color:var(--faint);font-size:12.5px;margin-bottom:0">Home district: <b>The Hills</b> — carving lines &amp; hill bombs.</p>
+    </div>
+    <div class="card k">
+      <h4>Electric scooter <span class="pill real">real</span></h4>
+      <p style="color:var(--muted);font-size:14px">Throttle + disc/regen brakes, suspension, folding. More <b>commute/traffic &amp; speed</b> than tricks.</p>
+      <ul class="clean" style="font-size:13px">
+        <li>Single vs dual motor; pneumatic (grip) vs solid (no flats) tyres.</li>
+        <li>Commuter ~15–20 mph → performance 40–50+ mph.</li>
+        <li>Slots into the city roads perfectly — a different way to travel between parks.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout design"><span class="lbl">Shared skeleton, different verbs</span>
+    <p>All four score the same way — <b>air time × rotation × clean landing × combo</b>. A single flag, <span class="mono">ControlAnchor = hands-free / handlebars</span>, reshapes the entire trick set and animation rig. That one switch is what lets skateboards and scooters coexist without doubling the code.</p>
+  </div>
+</div></section>
+
+<!-- ============ PROGRESSION ============ -->
+<section id="progression"><div class="wrap">
+  <div class="sec-no">10</div><h2 class="sec display">Progression, Goals &amp; Controls</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h4>The kid-proven loop <span class="pill real">real</span></h4>
+      <p style="color:var(--muted);font-size:14px">THPS's genius: <b>many small goals stacked on one short, restartable run in a sandbox.</b> A wipeout costs seconds, not minutes.</p>
+      <ul class="clean">
+        <li>Per-park goals: high score, <b>S-K-A-T-E</b> letters, a signature gap, "interact with X", hidden collectible.</li>
+        <li>Complete N goals → <b>unlock the next district</b> (unlock = travel).</li>
+        <li>Beginner grabs one letter; expert does all six goals in one line — same park, every skill level.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Rewards &amp; identity</h4>
+      <ul class="clean">
+        <li><b>Style points → currency</b> → boards, wheels, scooters, outfits, new parks.</li>
+        <li><b>Skill tree</b> unlocks trick families in the real learning order (ollie → shove → kickflip → grinds → spins → switch).</li>
+        <li><b>Create-a-skater</b> + eventually <b>create-a-park</b> (reuses the obstacle palette) = ownership &amp; endless replay.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Controls — instant to play, deep to master</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Tier</th><th>Scheme</th><th>For</th></tr>
+    <tr><td><b>Simple</b> (v1 today)</td><td>Joystick move · tap = jump · tap-in-air = auto-trick</td><td>Any kid, first 5 minutes</td></tr>
+    <tr><td><b>Intermediate</b></td><td>Directional trick buttons (THPS-style) + hold for grinds/manuals</td><td>Getting hooked</td></tr>
+    <tr><td><b>Advanced</b> (optional)</td><td>Flick gestures / combo timing, reverts, manual linking</td><td>Skill ceiling</td></tr>
+  </table></div>
+  <div class="callout real"><span class="lbl">Recommendation</span>
+    <p>Lead with a <b>THPS-style button scheme</b> (predictable, forgiving, instantly fun) with big assists and generous landing windows — that's the difference between a kid iterating happily and rage-quitting. Offer a simplified flick control as an "advanced" toggle later. The same input abstraction serves every rideable; bar-vehicles just remap "flip" inputs to "whip/spin".</p>
+  </div>
+</div></section>
+
+<!-- ============ COMPETITIONS / OLYMPIC LADDER ============ -->
+<section id="competitions"><div class="wrap">
+  <div class="sec-no">11</div><h2 class="sec display">The Road to the Games <span class="pill design" style="vertical-align:middle">career ladder</span></h2>
+  <p class="lead">This is the long-term dream that gives all the free-play a destination: start as an unknown skating the plaza, and <b>climb a ladder of real-style competitions all the way to an Olympic-style "Rollverse Games."</b> The best part — the real Olympic skateboarding formats map <em>exactly</em> onto the world we're already building.</p>
+
+  <div class="callout real"><span class="lbl">Real grounding</span>
+    <p>Skateboarding is a real Olympic sport (debuted Tokyo 2020, again Paris 2024) with two events: <b>Street</b> (a course of stairs, rails, ledges and gaps) and <b>Park</b> (a flowing bowl/pool course). Riders get <b>judged runs plus best-tricks</b>, scored <b>0–100</b> on difficulty, variety, execution, flow and consistency. So our <b>Marble Blocks = the Street event</b> and <b>Beachside Bowl = the Park event</b> — the districts <em>are</em> the arenas.</p>
+  </div>
+
+  <h3>The ladder — earn your way up (unlock = an invitation)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Tier</th><th>Event</th><th>How you get in</th><th>Reward</th></tr>
+    <tr><td><span class="tier t1">1</span></td><td><b>Street Sessions</b> (free-play jams)</td><td>Just skate — beat a target score in a district</td><td>First Rep points; local rep</td></tr>
+    <tr><td><span class="tier t2">2</span></td><td><b>Local Jam</b> (best-trick)</td><td>Reach a Rep threshold</td><td>Cash, a sponsor sticker, a new deck</td></tr>
+    <tr><td><span class="tier t3">3</span></td><td><b>Regional Open</b> (Street or Park)</td><td>Podium at a Local Jam</td><td>Ranking points, gear tier unlock</td></tr>
+    <tr><td><span class="tier t4">4</span></td><td><b>Pro Tour Stop</b> (qualifiers → finals)</td><td>Top ranking + required trick-tree unlocks</td><td>Pro status, signature setup</td></tr>
+    <tr><td><span class="tier t5">5</span></td><td><b>National Team spot</b></td><td>Win a Pro Tour stop</td><td>Team kit; invite to the Games</td></tr>
+    <tr><td><span class="tier t5">★</span></td><td><b>The Rollverse Games</b> (Olympic Park)</td><td>Qualify through the tour</td><td>The gold — and a golden board/scooter</td></tr>
+  </table></div>
+
+  <h3>How a competition plays (uses systems we already have)</h3>
+  <div class="grid g2">
+    <div class="card">
+      <h4>Format</h4>
+      <ul class="clean">
+        <li><b>Runs:</b> a timed line through the course — your <em>best</em> run counts (drop the worst), just like the real thing.</li>
+        <li><b>Best trick:</b> a jam where only your single biggest trick scores.</li>
+        <li><b>Qualifiers → Finals:</b> place high enough to advance.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Judging (0–100) — teach what makes skating <em>good</em></h4>
+      <ul class="clean">
+        <li><b>Difficulty</b> — harder tricks score more (our skill-tree tiers).</li>
+        <li><b>Variety</b> — repeating a trick is penalised (already in the combo engine).</li>
+        <li><b>Execution &amp; flow</b> — clean landings, no bails, keep momentum.</li>
+        <li><b>Consistency</b> — land the whole run, not one lucky trick.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout design"><span class="lbl">Why it's the perfect capstone</span>
+    <p>It reuses <em>everything</em>: the districts become arenas, the skill tree becomes entry requirements, the scoring engine becomes the judges, and gear choice becomes strategy. It answers "what am I working toward?" with a dream a kid understands — <b>the Olympics</b> — and it <b>generalises across rideables</b>: a <b>Scooter circuit</b> (park &amp; street scooter comps are real) and, later, <b>electric race/downhill events</b> all hang off the same ladder. One system, a lifetime of goals.</p>
+  </div>
+  <div class="callout real"><span class="lbl">Keep it kind</span>
+    <p>Losing a heat should feel like "so close — try again," never a dead end. Show what would've moved you up ("one more clean trick"), keep entry fees tiny, and always leave the free-play world open between events. The ladder is a <em>pull</em>, not a gate.</p>
+  </div>
+</div></section>
+
+<!-- ============ ROADMAP ============ -->
+<section id="roadmap"><div class="wrap">
+  <div class="sec-no">12</div><h2 class="sec display">Build Roadmap</h2>
+  <p class="lead">Keep it real but achievable — and keep Mateo iterating at every step.</p>
+  <div class="grid g3">
+    <div class="card"><h4>✅ v1 — Feel (done)</h4><p style="color:var(--muted);font-size:14px">Single-file web prototype: free movement, jump, earn a board, tricks, ramps, plus the live Studio for tuning game feel. The point was to make <em>feel</em> tunable.</p></div>
+    <div class="card"><h4>▶ v2 — World &amp; systems</h4><p style="color:var(--muted);font-size:14px">Data-driven Rideable system, 2–3 connected districts with roads, the people/Heat/Skate-Jail loop, a garage with real gear tradeoffs, per-park goals. Still web, so iteration stays instant.</p></div>
+    <div class="card"><h4>◻ v3 — iOS</h4><p style="color:var(--muted);font-size:14px">Port to <b>SpriteKit</b> (native 2D, simplest) or <b>Unity</b> (scales to a bigger 3D world). Carry the tuned numbers over from the web prototype — nothing wasted.</p></div>
+  </div>
+  <div class="callout design"><span class="lbl">Next concrete step (your call)</span>
+    <p>I can evolve the current prototype into a <b>v2 slice</b>: two connected districts joined by a road, the Heat/Skate-Jail system, and a scooter as a second rideable — proving the adaptable system end-to-end. Or we start smaller: just add the <b>people/Heat mechanic</b> to what's there so Mateo feels the "don't smash people" rule immediately. Tell me which and I'll build it.</p>
+  </div>
+</div></section>
+
+</main>
+
+<footer><div class="wrap">
+  <p><b style="color:var(--text)">Rollverse — Game Design Bible v0.1.</b> Realistic references are verified from skate shops, manufacturers, and skate-game documentation; <span class="pill real">real</span> marks researched fact, <span class="pill design">design</span> marks a proposal to react to. Nothing here is locked — it's a starting point for Mateo to push around.</p>
+</div></footer>
+
+<script>
+// Inline the two icon SVGs (kept as strings so the same art renders in the hero + showcases at every size).
+var ICON_A = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true"><defs><linearGradient id="a_bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b1c50"/><stop offset="0.55" stop-color="#3c2757"/><stop offset="1" stop-color="#5a3560"/></linearGradient><linearGradient id="a_tire" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6a3d"/><stop offset="1" stop-color="#ff4d6d"/></linearGradient><radialGradient id="a_hub" cx="0.4" cy="0.35" r="0.8"><stop offset="0" stop-color="#e6ffa8"/><stop offset="1" stop-color="#c6ff42"/></radialGradient></defs><rect width="1024" height="1024" rx="230" fill="url(#a_bg)"/><circle cx="512" cy="470" r="360" fill="#ff5c39" opacity="0.10"/><g transform="rotate(-24 512 512)"><ellipse cx="512" cy="512" rx="360" ry="150" fill="none" stroke="#37d6e6" stroke-width="16" opacity="0.55"/><circle cx="872" cy="512" r="26" fill="#37d6e6"/></g><circle cx="512" cy="512" r="220" fill="url(#a_tire)"/><circle cx="512" cy="512" r="220" fill="none" stroke="#00000030" stroke-width="10"/><circle cx="512" cy="512" r="120" fill="url(#a_hub)"/><circle cx="512" cy="512" r="34" fill="#2b1c50"/><g fill="#ffffffcc"><circle cx="512" cy="452" r="12"/><circle cx="564" cy="542" r="12"/><circle cx="460" cy="542" r="12"/></g><path d="M180 760 q 180 -70 360 -40 q 170 28 300 -70" fill="none" stroke="#c6ff42" stroke-width="20" stroke-linecap="round" opacity="0.9"/><path d="M170 812 q 200 -60 380 -34 q 160 22 300 -54" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.5"/></svg>';
+var ICON_B = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true"><defs><linearGradient id="b_bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6a3d"/><stop offset="1" stop-color="#ff3d63"/></linearGradient><radialGradient id="b_hub" cx="0.4" cy="0.35" r="0.85"><stop offset="0" stop-color="#f2ffcf"/><stop offset="1" stop-color="#c6ff42"/></radialGradient></defs><rect width="1024" height="1024" rx="230" fill="url(#b_bg)"/><circle cx="512" cy="486" r="300" fill="#2b1c50"/><circle cx="512" cy="486" r="300" fill="none" stroke="#ffffff22" stroke-width="14"/><circle cx="512" cy="486" r="168" fill="url(#b_hub)"/><circle cx="512" cy="486" r="52" fill="#2b1c50"/><g fill="#37d6e6"><circle cx="512" cy="404" r="18"/><circle cx="583" cy="527" r="18"/><circle cx="441" cy="527" r="18"/></g><path d="M150 828 q 200 -84 400 -50 q 180 30 324 -66" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round"/></svg>';
+function put(id,svg){ var el=document.getElementById(id); if(el) el.innerHTML=svg; }
+put('heroIconSlot', ICON_B);
+put('iconA', ICON_A); put('iconB', ICON_B);
+document.getElementById('iconAset').innerHTML = '<div class="s60">'+ICON_A+'</div><div class="s40">'+ICON_A+'</div><div class="s28">'+ICON_A+'</div>';
+document.getElementById('iconBset').innerHTML = '<div class="s60">'+ICON_B+'</div><div class="s40">'+ICON_B+'</div><div class="s28">'+ICON_B+'</div>';
+</script>
+</body>
+</html>

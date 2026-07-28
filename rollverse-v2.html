@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Rollverse — v2 slice</title>
+<meta name="color-scheme" content="dark" />
+<body>
+<!--
+  ROLLVERSE v2 SLICE — proving the adaptable engine end-to-end.
+  Demonstrates:
+   1. A data-driven RIDEABLE system: skateboard & scooter are configs of ONE core.
+      (Flips vs. whips, feet vs. handlebars — same physics + same scoring engine.)
+   2. TWO districts (Street Plaza + Bowl Park) joined by a ROAD with traffic.
+   3. The PEOPLE / HEAT / SKATE-JAIL loop: hop people = style, smash them = heat,
+      max heat => a guard chases you => caught => brief cartoon jail.
+  Single file, canvas, no libraries.
+-->
+<style>
+  :root{
+    --ink:#0f0d17; --text:#efeafc; --muted:#a79fc4;
+    --coral:#ff5c39; --volt:#c6ff42; --cyan:#37d6e6; --gold:#ffce4a; --violet:#a583ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--ink);color:var(--text);overflow:hidden;touch-action:none;user-select:none;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  #game{display:block;width:100%;height:100%}
+  .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,Consolas,monospace}
+
+  /* HUD */
+  .hud{position:fixed;top:0;left:0;right:0;padding:12px;display:flex;gap:9px;flex-wrap:wrap;
+    align-items:flex-start;pointer-events:none;z-index:5}
+  .chip{background:#0f0d17cc;border:1px solid #ffffff22;border-radius:999px;padding:6px 12px;
+    backdrop-filter:blur(8px);display:flex;align-items:baseline;gap:7px}
+  .chip .k{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:#c9c1e6}
+  .chip .v{font-size:17px;font-weight:900}
+  .chip.score .v{color:var(--volt)}
+  .chip.ride .v{color:var(--cyan);font-size:14px}
+  .chip.combo{display:none;border-color:var(--coral);background:#2a0f0acc}
+  .chip.combo.on{display:flex}
+  .chip.combo .v{color:var(--coral)}
+  .heatwrap{display:flex;align-items:center;gap:8px}
+  .heatbar{width:96px;height:9px;border-radius:999px;background:#ffffff26;overflow:hidden;position:relative}
+  .heatbar > i{position:absolute;inset:0;width:0%;background:linear-gradient(90deg,var(--gold),var(--coral));transition:width .15s}
+  .heatbar.hot{box-shadow:0 0 0 2px var(--coral)}
+
+  .foot{position:fixed;left:0;right:0;bottom:0;z-index:4;padding:9px;display:flex;gap:7px;
+    align-items:center;justify-content:center;flex-wrap:wrap;pointer-events:none}
+  .foot .k{font-size:11px;color:#d7d0f0cc;background:#0f0d17b0;padding:5px 10px;border-radius:999px;border:1px solid #ffffff1a}
+  .foot .k b{color:#fff}
+  @media (pointer:coarse){ .foot{display:none} }
+
+  /* Switch button (top-right) */
+  #switch{position:fixed;top:12px;right:12px;z-index:15;pointer-events:auto;display:none;
+    font:inherit;font-weight:800;font-size:13px;cursor:pointer;border-radius:11px;padding:9px 13px;
+    border:1px solid var(--cyan);background:#0e2a30cc;color:#dffbff;backdrop-filter:blur(8px)}
+  #switch.show{display:block}
+  #switch b{color:var(--cyan)}
+
+  /* Banner (district name) */
+  #banner{position:fixed;top:52px;left:0;right:0;text-align:center;z-index:6;pointer-events:none;opacity:0;
+    transition:opacity .4s}
+  #banner.show{opacity:1}
+  #banner span{display:inline-block;font-weight:900;text-transform:uppercase;letter-spacing:.04em;
+    font-size:26px;background:#0f0d17aa;padding:8px 22px;border-radius:14px;border:1px solid #ffffff22}
+
+  /* Jail overlay */
+  #jail{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
+    background:#0b0913e0;backdrop-filter:blur(3px)}
+  #jail.show{display:flex}
+  #jail .box{text-align:center;padding:26px 30px;border-radius:20px;background:#191527;border:1px solid #4a3a6a}
+  #jail h2{margin:0 0 4px;font-size:40px;font-weight:900;text-transform:uppercase;color:var(--coral)}
+  #jail p{margin:2px 0;color:var(--muted)}
+  #jail .cd{font-size:52px;font-weight:900;color:var(--gold);margin-top:6px}
+  #jail .bars{font-size:40px;letter-spacing:6px;margin-top:8px;color:#6f6790}
+
+  /* Intro */
+  #intro{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:20px;
+    background:radial-gradient(120% 90% at 50% 0%,#2a1c4dee,#0b0913f4)}
+  #intro.gone{display:none}
+  .card{background:#181426;border:1px solid #332a4d;border-radius:20px;max-width:460px;width:100%;padding:24px;
+    box-shadow:0 20px 50px -20px #000c}
+  .card .tag{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);font-weight:800}
+  .card h1{margin:6px 0 2px;font-size:34px;font-weight:900;text-transform:uppercase;letter-spacing:-.02em}
+  .card h1 b{color:var(--coral)}
+  .card p{color:var(--muted);margin:6px 0 0;font-size:14px}
+  .keys{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:16px 0;font-size:13.5px;text-align:left}
+  kbd{background:#221c34;border:1px solid #3a2f52;border-bottom-width:2px;border-radius:6px;padding:2px 7px;
+    font:inherit;font-size:12px;font-weight:700}
+  .btn{font:inherit;font-weight:800;cursor:pointer;border-radius:12px;padding:12px 16px;width:100%;
+    border:1px solid var(--coral);background:var(--coral);color:#1a0a06;font-size:15px}
+
+  /* Touch */
+  #touch{position:fixed;inset:0;z-index:8;pointer-events:none;display:none}
+  @media (pointer:coarse){ #touch{display:block} }
+  #stick{position:absolute;left:22px;bottom:24px;width:126px;height:126px;border-radius:50%;
+    background:#ffffff12;border:1px solid #ffffff2a;pointer-events:auto}
+  #nub{position:absolute;left:43px;top:43px;width:54px;height:54px;border-radius:50%;background:#ffffff30;border:1px solid #ffffff55}
+  .tbtn{position:absolute;right:20px;width:78px;height:78px;border-radius:50%;background:#ff5c3930;border:2px solid var(--coral);
+    color:#fff;font-weight:900;font-size:12px;pointer-events:auto;display:flex;align-items:center;justify-content:center;text-transform:uppercase}
+  #bJump{bottom:24px}
+  #bTrick{bottom:116px;background:#37d6e630;border-color:var(--cyan)}
+  #bSwitch{bottom:208px;width:60px;height:60px;background:#c6ff4226;border-color:var(--volt);font-size:11px;display:none}
+  #bSwitch.show{display:flex}
+</style>
+
+<canvas id="game"></canvas>
+
+<div class="hud">
+  <div class="chip score"><span class="k">Score</span><span class="v mono" id="hScore">0</span></div>
+  <div class="chip combo" id="hComboWrap"><span class="k">Combo</span><span class="v mono" id="hCombo">x1</span></div>
+  <div class="chip ride"><span class="k">Riding</span><span class="v" id="hRide">Skateboard</span></div>
+  <div class="chip"><span class="k">Heat</span>
+    <div class="heatwrap"><div class="heatbar" id="heatBar"><i></i></div></div></div>
+</div>
+
+<button id="switch">Switch ride <b>(T)</b></button>
+
+<div id="banner"><span id="bannerText"></span></div>
+
+<div id="jail"><div class="box">
+  <h2>Skate Jail</h2>
+  <p>Busted for skating into people!</p>
+  <div class="bars">▯▮▯▮▯▮▯</div>
+  <div class="cd mono" id="jailCd">3</div>
+  <p style="font-size:12px">Take it easy on the crowd out there…</p>
+</div></div>
+
+<div id="touch">
+  <div id="stick"><div id="nub"></div></div>
+  <div class="tbtn" id="bTrick">Trick</div>
+  <div class="tbtn" id="bJump">Jump</div>
+  <div class="tbtn" id="bSwitch">Ride</div>
+</div>
+
+<div class="foot">
+  <span class="k"><b>Move</b> WASD/Arrows</span>
+  <span class="k"><b>Jump</b> Space</span>
+  <span class="k"><b>Tricks</b> J K L (in air)</span>
+  <span class="k"><b>Grind</b> land on a rail/ledge</span>
+  <span class="k"><b>Switch ride</b> T</span>
+</div>
+
+<div id="intro"><div class="card">
+  <div class="tag">Rollverse · v2 slice</div>
+  <h1>Roll<b>verse</b></h1>
+  <p>Skate the <b>Street Plaza</b>, cross the <b>road</b> (mind the cars!), and reach the <b>Bowl Park</b> — where a scooter is waiting. Grind rails, launch ramps, and rack up tricks.</p>
+  <div class="keys">
+    <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move any direction</span>
+    <span><kbd>Space</kbd></span><span>Jump — <b>hop over people</b> for style</span>
+    <span><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span><span>Tricks in the air (flips on a board, whips on a scooter)</span>
+    <span><kbd>T</kbd></span><span>Switch board ↔ scooter (once you find it)</span>
+  </div>
+  <p style="font-size:12.5px;color:#8a80ad"><b style="color:#ff9ec2">Don't smash into people.</b> Hop over them or weave around them. Crash too much and a guard hauls you to Skate Jail!</p>
+  <button class="btn" id="startBtn" style="margin-top:16px">Drop in</button>
+</div></div>
+
+<script>
+(function(){
+"use strict";
+var canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2), VW=0, VH=0;
+function resize(){ VW=innerWidth; VH=innerHeight; canvas.width=VW*DPR|0; canvas.height=VH*DPR|0;
+  canvas.style.width=VW+'px'; canvas.style.height=VH+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+addEventListener('resize',resize); resize();
+var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------------------------------------------------------------------
+   WORLD — two districts joined by a road
+   Plaza:  x 0..1300   |  Road: x 1300..2200 (cars drive vertically)  |  Bowl: x 2200..3600
+--------------------------------------------------------------------------- */
+var WORLD={w:3600,h:1500};
+var ROAD={x0:1300,x1:2200,y0:0,y1:WORLD.h};
+var districts=[
+  {name:'Street Plaza', x0:0,    x1:1300, announced:false},
+  {name:'The Road',      x0:1300, x1:2200, announced:false},
+  {name:'Bowl Park',     x0:2200, x1:3600, announced:false}
+];
+
+/* ---------------------------------------------------------------------------
+   RIDEABLE SYSTEM — the adaptability engine.
+   Two entries (skateboard, scooter) are just DATA. Shared physics + shared
+   scoring engine; only these fields differ. Adding e-board later = another entry.
+--------------------------------------------------------------------------- */
+var RIDEABLES={
+  skateboard:{
+    label:'Skateboard', anchor:'feet',           // hands free -> FLIP verbs
+    topSpeed:340, accel:9, jumpPower:305, gravity:640,
+    deck:'#ff5c39', wheels:'#ffd35e',
+    tricks:['Kickflip','Heelflip','Shove-it','360 Flip','Varial Flip'],
+    trickBase:42
+  },
+  scooter:{
+    label:'Pro Scooter', anchor:'bars',          // held bars -> WHIP verbs
+    topSpeed:300, accel:11, jumpPower:330, gravity:600,
+    deck:'#37d6e6', wheels:'#eaf6ff',
+    tricks:['Bar Spin','Tailwhip','X-Up','Bri Flip','360 Whip'],
+    trickBase:46
+  }
+};
+var unlocked={skateboard:true, scooter:false};
+
+/* ---------------------------------------------------------------------------
+   Player
+--------------------------------------------------------------------------- */
+var player={
+  x:300,y:900,vx:0,vy:0, z:0,vz:0,onGround:true,
+  face:0, rideKey:'skateboard',
+  spin:0, spinRate:0, flip:0,
+  grinding:false, grindZone:null
+};
+function ride(){ return RIDEABLES[player.rideKey]; }
+
+/* Obstacles ---------------------------------------------------------------- */
+// Grind rails/ledges (street): long thin boxes. Contact while low+moving => grind.
+var rails=[
+  {x:260,y:640,w:360,h:26,col:'#c9c1e6'},   // plaza ledge
+  {x:760,y:1040,w:300,h:22,col:'#ffce4a'},  // plaza rail
+  {x:420,y:1120,w:220,h:60,col:'#8a7fb0',pad:true}, // manual pad (also grindable edge)
+  {x:2500,y:520,w:340,h:24,col:'#c9c1e6'}   // bowl-side ledge
+];
+// Ramps (launch): ride in fast on the ground => big air.
+var ramps=[
+  {x:980,y:760,dir:0.2,len:150},
+  {x:2450,y:1080,dir:Math.PI,len:170},
+  {x:2900,y:640,dir:-Math.PI/2,len:170},
+  {x:3200,y:1080,dir:Math.PI*0.85,len:170}
+];
+// Trick zones (score multiplier)
+var zones=[ {x:2800,y:820,r:230,mult:2}, {x:600,y:820,r:170,mult:2} ];
+
+// Scooter pickup lives in Bowl Park
+var scooterPickup={x:3000,y:900,taken:false,t:0};
+
+/* People + traffic --------------------------------------------------------- */
+var peds=[];
+function makePed(){
+  // keep pedestrians in the districts + sidewalks, not mid-road-lanes
+  var side=Math.random()<0.5;
+  var x = side ? 100+Math.random()*1100 : 2300+Math.random()*1200;
+  return {x:x,y:120+Math.random()*(WORLD.h-240),tx:0,ty:0,timer:0,
+    hue:200+Math.random()*140,vx:0,vy:0,boing:0,hopped:false,bumped:false};
+}
+for(var i=0;i<22;i++) peds.push(makePed());
+// a few pedestrians crossing the road at a crosswalk
+var cars=[];
+var lanes=[1420,1560,1940,2080];
+for(var c=0;c<8;c++){
+  var ln=lanes[c%lanes.length]; var down=(c%lanes.length)<2;
+  cars.push({x:ln,y:Math.random()*WORLD.h,dir:down?1:-1,
+    spd:150+Math.random()*90,col:'hsl('+(Math.random()*360|0)+' 65% 55%)'});
+}
+
+/* Popups + game state ------------------------------------------------------ */
+var pops=[]; function pop(x,y,t,c){ pops.push({x:x,y:y,t:t,c:c||'#fff',life:1}); }
+var G={score:0,best:0,combo:0,comboScore:0,tricks:0,heat:0,jail:0,jailTimer:0};
+var HEAT_MAX=100;
+var guard=null; // {x,y,vx,vy}
+
+/* Input -------------------------------------------------------------------- */
+var keys={}, jumpBuf=false, trickBuf=false, switchBuf=false;
+addEventListener('keydown',function(e){
+  var k=e.key.toLowerCase();
+  if(['arrowup','arrowdown','arrowleft','arrowright',' '].indexOf(k)>=0) e.preventDefault();
+  if(k===' ') jumpBuf=true;
+  if(k==='j'||k==='k'||k==='l') trickBuf=true;
+  if(k==='t') switchBuf=true;
+  keys[k]=true;
+},{passive:false});
+addEventListener('keyup',function(e){ keys[e.key.toLowerCase()]=false; });
+
+var stickVec={x:0,y:0};
+(function(){
+  var stick=document.getElementById('stick'), nub=document.getElementById('nub'), origin=null, R=50;
+  function s(e){ var t=e.changedTouches[0]; origin={x:t.clientX,y:t.clientY}; m(e); }
+  function m(e){ if(!origin)return; e.preventDefault(); var t=e.changedTouches[0];
+    var dx=t.clientX-origin.x, dy=t.clientY-origin.y, d=Math.hypot(dx,dy)||1, cc=Math.min(d,R);
+    stickVec.x=dx/d*(cc/R); stickVec.y=dy/d*(cc/R); nub.style.transform='translate('+stickVec.x*R+'px,'+stickVec.y*R+'px)'; }
+  function e2(){ origin=null; stickVec.x=stickVec.y=0; nub.style.transform=''; }
+  stick.addEventListener('touchstart',s,{passive:false}); stick.addEventListener('touchmove',m,{passive:false});
+  stick.addEventListener('touchend',e2); stick.addEventListener('touchcancel',e2);
+  document.getElementById('bJump').addEventListener('touchstart',function(e){e.preventDefault();jumpBuf=true;},{passive:false});
+  document.getElementById('bTrick').addEventListener('touchstart',function(e){e.preventDefault();trickBuf=true;},{passive:false});
+  document.getElementById('bSwitch').addEventListener('touchstart',function(e){e.preventDefault();switchBuf=true;},{passive:false});
+})();
+document.getElementById('switch').addEventListener('click',function(){ switchBuf=true; });
+
+/* Helpers ------------------------------------------------------------------ */
+function moveInput(){
+  var dx=0,dy=0;
+  if(keys['a']||keys['arrowleft'])dx-=1; if(keys['d']||keys['arrowright'])dx+=1;
+  if(keys['w']||keys['arrowup'])dy-=1; if(keys['s']||keys['arrowdown'])dy+=1;
+  dx+=stickVec.x; dy+=stickVec.y; var d=Math.hypot(dx,dy);
+  if(d>1){dx/=d;dy/=d;} return {x:dx,y:dy,mag:Math.min(d,1)};
+}
+function zoneMult(x,y){ var m=1; for(var i=0;i<zones.length;i++) if(Math.hypot(x-zones[i].x,y-zones[i].y)<zones[i].r) m=Math.max(m,zones[i].mult); return m; }
+function onRoad(x){ return x>ROAD.x0 && x<ROAD.x1; }
+
+/* Rideable switch ---------------------------------------------------------- */
+function doSwitch(){
+  if(!unlocked.scooter) return;
+  player.rideKey = player.rideKey==='skateboard' ? 'scooter' : 'skateboard';
+  document.getElementById('hRide').textContent = ride().label;
+  pop(player.x, player.y-60, 'Now riding: '+ride().label, ride().deck);
+}
+
+/* Tricks (shared scoring engine; verb list comes from the rideable) -------- */
+function doTrick(){
+  var r=ride(); var name=r.tricks[G.tricks % r.tricks.length];
+  G.tricks++; G.combo++;
+  // anchor changes the animation: feet => flip the board; bars => spin/whip
+  if(r.anchor==='feet'){ player.spinRate=(Math.random()<.5?1:-1)*(7+Math.random()*5); player.flip=player.flip?0:1; }
+  else { player.spinRate=(Math.random()<.5?1:-1)*(9+Math.random()*4); player.flip=0; }
+  G.comboScore += Math.round(r.trickBase*zoneMult(player.x,player.y));
+  pop(player.x, player.y-player.z-46, name+'!', r.anchor==='feet'?'#ff5c39':'#37d6e6');
+  coolHeat(4); // landing tricks charms the crowd -> lowers heat a touch
+  refresh();
+}
+function landCombo(){
+  if(G.combo>0){
+    var g=Math.round(G.comboScore*(1+(G.combo-1)*0.5));
+    addScore(g,player.x,player.y);
+    pop(player.x,player.y-30,'+'+g+(G.combo>1?'  x'+G.combo+' combo!':''), '#c6ff42');
+  }
+  G.combo=0; G.comboScore=0; refresh();
+}
+function addScore(n){ G.score+=n; if(G.score>G.best)G.best=G.score; refresh(); }
+
+/* Heat / jail -------------------------------------------------------------- */
+function addHeat(n){
+  G.heat=Math.min(HEAT_MAX,G.heat+n);
+  if(G.heat>=HEAT_MAX && !guard) spawnGuard();
+  refresh();
+}
+function coolHeat(n){ G.heat=Math.max(0,G.heat-n); if(guard && G.heat<45){ guard=null; pop(player.x,player.y-60,'Guard gave up!','#c6ff42'); } refresh(); }
+function spawnGuard(){
+  guard={ x:player.x-Math.sign(player.vx||1)*260, y:player.y+60, vx:0, vy:0 };
+  pop(player.x,player.y-70,'GUARD! Skate clean or run!','#ff5c39');
+}
+function goToJail(){
+  G.jail=1; G.jailTimer=3; guard=null; G.heat=0; G.combo=0; G.comboScore=0;
+  var lost=Math.min(G.score,220); G.score-=lost;
+  document.getElementById('jail').classList.add('show');
+  refresh();
+}
+
+/* Update ------------------------------------------------------------------- */
+function update(dt){
+  if(G.jail){
+    G.jailTimer-=dt;
+    document.getElementById('jailCd').textContent=Math.max(1,Math.ceil(G.jailTimer));
+    if(G.jailTimer<=0){ G.jail=0; document.getElementById('jail').classList.remove('show');
+      // released back in the plaza
+      player.x=300; player.y=900; player.vx=player.vy=0; player.z=0; player.onGround=true; }
+    return;
+  }
+
+  if(switchBuf){ doSwitch(); switchBuf=false; }
+  var r=ride();
+  var slow=(!player.onGround)?1:1; var t=dt*slow;
+
+  // movement
+  var inp=moveInput();
+  var target=r.topSpeed;
+  var a = player.onGround ? r.accel : r.accel*0.5;
+  var tvx=inp.x*target*inp.mag, tvy=inp.y*target*inp.mag;
+  player.vx+=(tvx-player.vx)*Math.min(1,a*t);
+  player.vy+=(tvy-player.vy)*Math.min(1,a*t);
+  if(inp.mag>0.1) player.face=Math.atan2(player.vy,player.vx);
+
+  // grinding overrides free movement direction slightly (locks to rail line)
+  if(player.grinding && player.grindZone){
+    var gz=player.grindZone;
+    player.y += (gz.cy - player.y)*Math.min(1,10*t); // snap to rail centerline
+    G.comboScore += r.trickBase*0.6*t*10; // steady grind score
+    if(Math.random()<0.4) pop(player.x,gz.cy-14,'', '#ffce4a');
+    // spark
+    if(!player.onGround || player.x<gz.x0-10 || player.x>gz.x1+10){ endGrind(); }
+  }
+
+  player.x+=player.vx*t; player.y+=player.vy*t;
+  player.x=Math.max(24,Math.min(WORLD.w-24,player.x));
+  player.y=Math.max(24,Math.min(WORLD.h-24,player.y));
+
+  // jump
+  if(jumpBuf && player.onGround){ player.vz=r.jumpPower; player.onGround=false; if(player.grinding) endGrind(); }
+  jumpBuf=false;
+
+  // gravity / height
+  if(!player.onGround){
+    player.vz-=r.gravity*t; player.z+=player.vz*t; player.spin+=(player.spinRate||0)*t;
+    if(player.z<=0){ player.z=0; player.onGround=true; player.vz=0; player.spin=0; player.flip=0; player.spinRate=0; landCombo(); tryGrindOnLand(); }
+  }
+
+  // ramps -> launch
+  if(player.onGround && !player.grinding){
+    var sp=Math.hypot(player.vx,player.vy);
+    for(var i=0;i<ramps.length;i++){ var rp=ramps[i];
+      if(Math.abs(player.x-rp.x)<74 && Math.abs(player.y-rp.y)<74 && sp>150){
+        player.vz=r.jumpPower*1.5; player.onGround=false; pop(player.x,player.y-40,'RAMP!','#37d6e6'); }
+    }
+  }
+
+  // trick
+  if(trickBuf){
+    if(!player.onGround) doTrick();
+    trickBuf=false;
+  }
+
+  // scooter pickup
+  if(!scooterPickup.taken){
+    scooterPickup.t+=t;
+    if(Math.hypot(player.x-scooterPickup.x,player.y-scooterPickup.y)<48){
+      scooterPickup.taken=true; unlocked.scooter=true;
+      document.getElementById('switch').classList.add('show');
+      document.getElementById('bSwitch').classList.add('show');
+      pop(scooterPickup.x,scooterPickup.y-30,'SCOOTER UNLOCKED! Press T','#c6ff42');
+      addScore(80);
+    }
+  }
+
+  updatePeds(t); updateCars(t); updateGuard(t);
+
+  // heat cools slowly when clean
+  if(G.heat>0) coolHeatSilent(6*dt);
+
+  // popups
+  for(var p=pops.length-1;p>=0;p--){ pops[p].y-=28*dt; pops[p].life-=dt*0.9; if(pops[p].life<=0) pops.splice(p,1); }
+
+  announceDistrict();
+  updateCamera(dt);
+}
+function coolHeatSilent(n){ G.heat=Math.max(0,G.heat-n); if(guard&&G.heat<45){guard=null;} refresh(); }
+
+/* Grind detection ---------------------------------------------------------- */
+function tryGrindOnLand(){
+  for(var i=0;i<rails.length;i++){ var rl=rails[i];
+    var cy=rl.y+rl.h/2;
+    if(player.x>rl.x-10 && player.x<rl.x+rl.w+10 && Math.abs(player.y-cy)<rl.h/2+14 && Math.hypot(player.vx,player.vy)>60){
+      startGrind(rl); return;
+    }
+  }
+}
+function startGrind(rl){
+  player.grinding=true;
+  player.grindZone={x0:rl.x,x1:rl.x+rl.w,cy:rl.y+rl.h/2};
+  G.combo++; pop(player.x,rl.y-16,'GRIND!','#ffce4a');
+}
+function endGrind(){
+  if(!player.grinding) return;
+  player.grinding=false; player.grindZone=null;
+  landCombo();
+}
+
+/* Peds --------------------------------------------------------------------- */
+function updatePeds(t){
+  for(var i=0;i<peds.length;i++){ var pd=peds[i];
+    pd.timer-=t;
+    if(pd.timer<=0){ pd.tx=80+Math.random()*(WORLD.w-160); pd.ty=80+Math.random()*(WORLD.h-160); pd.timer=2+Math.random()*3; }
+    if(pd.boing>0){ pd.boing-=t; pd.x+=pd.vx*t; pd.y+=pd.vy*t; pd.vx*=0.92; pd.vy*=0.92; }
+    else { var dx=pd.tx-pd.x,dy=pd.ty-pd.y,d=Math.hypot(dx,dy)||1; pd.x+=dx/d*30*t; pd.y+=dy/d*30*t; }
+    pd.x=Math.max(20,Math.min(WORLD.w-20,pd.x)); pd.y=Math.max(20,Math.min(WORLD.h-20,pd.y));
+
+    var ddx=player.x-pd.x, ddy=player.y-pd.y, dd=Math.hypot(ddx,ddy);
+    if(dd<32){
+      if(player.z>26){ if(!pd.hopped){ pd.hopped=true; addScore(15); pop(pd.x,pd.y-40,'HOP! +15','#37d6e6'); } }
+      else if(player.onGround){
+        if(!pd.bumped){
+          pd.bumped=true;
+          var b=Math.hypot(ddx,ddy)||1; pd.vx=-ddx/b*220; pd.vy=-ddy/b*220; pd.boing=0.5;
+          player.vx*=-0.3; player.vy*=-0.3;
+          addScore(-25); addHeat(26);
+          if(player.grinding) endGrind();
+          if(G.combo>0){ G.combo=0; G.comboScore=0; }
+          pop(pd.x,pd.y-36,'CRASH! -25','#ff5c39');
+        }
+      }
+    } else { pd.hopped=false; pd.bumped=false; }
+  }
+}
+
+/* Cars --------------------------------------------------------------------- */
+function updateCars(t){
+  for(var i=0;i<cars.length;i++){ var ca=cars[i];
+    ca.y+=ca.dir*ca.spd*t;
+    if(ca.y>WORLD.h+40) ca.y=-40; if(ca.y<-40) ca.y=WORLD.h+40;
+    var dx=player.x-ca.x, dy=player.y-ca.y;
+    if(Math.abs(dx)<34 && Math.abs(dy)<52 && player.z<30){
+      // hit by a car (can't ollie a car) -> big penalty + heat + knockback
+      if(!ca.hit){ ca.hit=true;
+        var b=Math.hypot(dx,dy)||1; player.vx=dx/b*280; player.vy=dy/b*280;
+        addScore(-40); addHeat(34); if(player.grinding) endGrind();
+        G.combo=0; G.comboScore=0;
+        pop(player.x,player.y-40,'CAR! -40','#ff5c39');
+      }
+    } else { ca.hit=false; }
+  }
+}
+
+/* Guard chase -------------------------------------------------------------- */
+function updateGuard(t){
+  if(!guard) return;
+  var dx=player.x-guard.x, dy=player.y-guard.y, d=Math.hypot(dx,dy)||1;
+  var gs=250; // guard speed (a bit slower than skating so you CAN escape)
+  guard.x+=dx/d*gs*t; guard.y+=dy/d*gs*t;
+  if(d<30){ goToJail(); }
+}
+
+/* Camera ------------------------------------------------------------------- */
+var cam={x:0,y:0};
+function updateCamera(dt){
+  var tx=player.x-VW/2, ty=(player.y-player.z)-VH/2;
+  var k=reduce?1:Math.min(1,6*dt); cam.x+=(tx-cam.x)*k; cam.y+=(ty-cam.y)*k;
+}
+
+/* District banner ---------------------------------------------------------- */
+var curDistrict=-1, bannerT=0;
+function announceDistrict(){
+  var d=-1; for(var i=0;i<districts.length;i++){ if(player.x>=districts[i].x0 && player.x<districts[i].x1){ d=i; break; } }
+  if(d!==curDistrict && d>=0){ curDistrict=d; showBanner(districts[d].name); }
+}
+function showBanner(txt){
+  var b=document.getElementById('banner'); document.getElementById('bannerText').textContent=txt;
+  b.classList.add('show'); clearTimeout(showBanner._t); showBanner._t=setTimeout(function(){ b.classList.remove('show'); },1800);
+}
+
+/* ---------------------------------------------------------------------------
+   RENDER
+--------------------------------------------------------------------------- */
+function draw(){
+  // sky
+  var g=ctx.createLinearGradient(0,0,0,VH); g.addColorStop(0,'#241a44'); g.addColorStop(.6,'#3a2a54'); g.addColorStop(1,'#5a3f5e');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+  ctx.save(); ctx.translate(-cam.x,-cam.y);
+
+  drawGround(); drawZones(); drawRamps(); drawRails();
+  if(!scooterPickup.taken) drawScooterPickup();
+
+  var draws=[];
+  for(var i=0;i<peds.length;i++) draws.push({y:peds[i].y,fn:(function(pd){return function(){drawPed(pd);};})(peds[i])});
+  for(var c=0;c<cars.length;c++) draws.push({y:cars[c].y,fn:(function(ca){return function(){drawCar(ca);};})(cars[c])});
+  if(guard) draws.push({y:guard.y,fn:drawGuard});
+  draws.push({y:player.y,fn:drawPlayer});
+  draws.sort(function(a,b){return a.y-b.y;});
+  for(var d=0;d<draws.length;d++) draws[d].fn();
+
+  drawPops(); ctx.restore();
+}
+
+function drawGround(){
+  // plaza
+  ctx.fillStyle='#6f6a7d'; ctx.fillRect(0,0,ROAD.x0,WORLD.h);
+  // bowl district
+  ctx.fillStyle='#6a7a72'; ctx.fillRect(ROAD.x1,0,WORLD.w-ROAD.x1,WORLD.h);
+  // road
+  ctx.fillStyle='#2d2b38'; ctx.fillRect(ROAD.x0,0,ROAD.x1-ROAD.x0,WORLD.h);
+  // road edges (sidewalk curbs)
+  ctx.fillStyle='#b9b3c9'; ctx.fillRect(ROAD.x0-10,0,10,WORLD.h); ctx.fillRect(ROAD.x1,0,10,WORLD.h);
+  // lane dashes
+  ctx.strokeStyle='#ffd35e88'; ctx.lineWidth=4; ctx.setLineDash([26,26]);
+  var mid=(ROAD.x0+ROAD.x1)/2;
+  ctx.beginPath(); ctx.moveTo(mid,0); ctx.lineTo(mid,WORLD.h); ctx.stroke(); ctx.setLineDash([]);
+  // crosswalk stripes near player rows
+  ctx.fillStyle='#e8e4f0aa';
+  for(var cw=0;cw<8;cw++){ ctx.fillRect(ROAD.x0+18+cw*((ROAD.x1-ROAD.x0-36)/8), 820, 24, 60); }
+  // tile grids in districts
+  ctx.strokeStyle='#00000015'; ctx.lineWidth=2; ctx.beginPath();
+  for(var x=0;x<=WORLD.w;x+=120){ if(x<ROAD.x0-10||x>ROAD.x1+10){ ctx.moveTo(x,0); ctx.lineTo(x,WORLD.h);} }
+  for(var y=0;y<=WORLD.h;y+=120){ ctx.moveTo(0,y); ctx.lineTo(ROAD.x0,y); ctx.moveTo(ROAD.x1,y); ctx.lineTo(WORLD.w,y); }
+  ctx.stroke();
+  // outer wall
+  ctx.strokeStyle='#2a2436'; ctx.lineWidth=16; ctx.strokeRect(8,8,WORLD.w-16,WORLD.h-16);
+  // district labels painted on ground
+  ctx.fillStyle='#ffffff10'; ctx.font='900 120px ui-sans-serif'; ctx.textAlign='center';
+  ctx.fillText('PLAZA',650,300); ctx.fillText('BOWL',2900,300);
+}
+function drawZones(){
+  for(var i=0;i<zones.length;i++){ var z=zones[i];
+    var grd=ctx.createRadialGradient(z.x,z.y,10,z.x,z.y,z.r); grd.addColorStop(0,'#37d6e628'); grd.addColorStop(1,'#37d6e600');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,7); ctx.fill();
+    ctx.strokeStyle='#37d6e677'; ctx.lineWidth=3; ctx.setLineDash([10,10]); ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#dffbff'; ctx.font='800 14px ui-sans-serif'; ctx.textAlign='center'; ctx.fillText('TRICK ZONE x'+z.mult,z.x,z.y-z.r+20);
+  }
+}
+function drawRamps(){
+  for(var i=0;i<ramps.length;i++){ var r=ramps[i]; ctx.save(); ctx.translate(r.x,r.y); ctx.rotate(r.dir);
+    var grd=ctx.createLinearGradient(-r.len/2,0,r.len/2,0); grd.addColorStop(0,'#ff5c39'); grd.addColorStop(1,'#ffce4a');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.moveTo(-r.len/2,34); ctx.lineTo(r.len/2,-30); ctx.lineTo(r.len/2,34); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#ffffffaa'; ctx.lineWidth=4; for(var c=-1;c<2;c++){ ctx.beginPath(); ctx.moveTo(c*34-8,20); ctx.lineTo(c*34+8,2); ctx.lineTo(c*34-8,-16); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+function drawRails(){
+  for(var i=0;i<rails.length;i++){ var rl=rails[i];
+    // shadow
+    ctx.fillStyle='#0003'; ctx.fillRect(rl.x,rl.y+rl.h,rl.w,8);
+    ctx.fillStyle=rl.col; roundRect(rl.x,rl.y,rl.w,rl.h,rl.pad?10:7); ctx.fill();
+    ctx.fillStyle='#ffffff30'; roundRect(rl.x,rl.y,rl.w,Math.max(3,rl.h*0.28),6); ctx.fill();
+    if(!rl.pad){ ctx.strokeStyle='#00000030'; ctx.lineWidth=2; for(var s=rl.x+16;s<rl.x+rl.w;s+=40){ ctx.beginPath(); ctx.moveTo(s,rl.y+rl.h); ctx.lineTo(s,rl.y+rl.h+14); ctx.stroke(); } }
+  }
+}
+function drawScooterPickup(){
+  var s=scooterPickup, bob=Math.sin(s.t*3)*6;
+  shadow(s.x,s.y,18,0.28);
+  ctx.save(); ctx.translate(s.x,s.y-26+bob);
+  // mini scooter icon
+  ctx.strokeStyle='#37d6e6'; ctx.lineWidth=6; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-16,10); ctx.lineTo(14,10); ctx.stroke();          // deck
+  ctx.beginPath(); ctx.moveTo(14,10); ctx.lineTo(18,-18); ctx.lineTo(30,-18); ctx.stroke(); // stem+bar
+  ctx.fillStyle='#eaf6ff'; ctx.beginPath(); ctx.arc(-16,16,6,0,7); ctx.arc(16,16,6,0,7); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='#c6ff42'; ctx.font='800 13px ui-sans-serif'; ctx.textAlign='center'; ctx.fillText('▲ scooter',s.x,s.y-46+bob);
+}
+
+function shadow(x,y,r,a){ ctx.fillStyle='rgba(0,0,0,'+a+')'; ctx.beginPath(); ctx.ellipse(x,y,r,r*0.42,0,0,7); ctx.fill(); }
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function drawPed(pd){
+  shadow(pd.x,pd.y,12,0.3);
+  ctx.save(); ctx.translate(pd.x,pd.y);
+  ctx.strokeStyle='#2a2436'; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-4,-2); ctx.lineTo(-5,-14); ctx.moveTo(4,-2); ctx.lineTo(5,-14); ctx.stroke();
+  ctx.fillStyle='hsl('+pd.hue+' 45% 62%)'; roundRect(-9,-30,18,20,7); ctx.fill();
+  ctx.fillStyle='#f0c9a0'; ctx.beginPath(); ctx.arc(0,-38,7,0,7); ctx.fill();
+  ctx.restore();
+}
+function drawCar(ca){
+  shadow(ca.x,ca.y,22,0.28);
+  ctx.save(); ctx.translate(ca.x,ca.y);
+  ctx.fillStyle=ca.col; roundRect(-18,-30,36,60,10); ctx.fill();
+  ctx.fillStyle='#0b0913aa'; roundRect(-13,-20,26,16,6); ctx.fill(); roundRect(-13,6,26,14,6); ctx.fill();
+  ctx.fillStyle='#ffe07a'; // headlights point in travel dir
+  var hy=ca.dir>0?26:-26; ctx.fillRect(-12,hy-3,7,6); ctx.fillRect(5,hy-3,7,6);
+  ctx.restore();
+}
+function drawGuard(){
+  shadow(guard.x,guard.y,13,0.32);
+  ctx.save(); ctx.translate(guard.x,guard.y);
+  ctx.strokeStyle='#1c1830'; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-4,-2); ctx.lineTo(-5,-15); ctx.moveTo(4,-2); ctx.lineTo(5,-15); ctx.stroke();
+  ctx.fillStyle='#2f3aa0'; roundRect(-10,-34,20,22,7); ctx.fill();     // uniform
+  ctx.fillStyle='#ffd35e'; ctx.fillRect(-10,-26,20,4);                 // belt/badge line
+  ctx.fillStyle='#f0c9a0'; ctx.beginPath(); ctx.arc(0,-42,7,0,7); ctx.fill();
+  ctx.fillStyle='#1c1830'; ctx.beginPath(); ctx.arc(0,-45,8,Math.PI,0); ctx.fill(); ctx.fillRect(-8,-46,16,3); // cap
+  ctx.fillStyle='#fff'; ctx.font='900 11px ui-sans-serif'; ctx.textAlign='center'; ctx.fillText('!',0,-40);
+  ctx.restore();
+}
+function drawPlayer(){
+  var r=ride(); var px=player.x, py=player.y, z=player.z;
+  shadow(px,py,15-Math.min(9,z*0.05), Math.max(0.08,0.32-z*0.0016));
+  // grind sparks
+  if(player.grinding){ for(var s=0;s<3;s++){ ctx.fillStyle=['#ffce4a','#fff','#ff5c39'][s]; var sx=px-10+Math.random()*20; ctx.fillRect(sx,py+2+Math.random()*4,2,2); } }
+
+  ctx.save(); ctx.translate(px,py-z);
+  if(!player.onGround && (player.spin||player.flip)){
+    ctx.rotate(player.spin*0.12);
+    if(r.anchor==='feet' && player.flip){ var fx=Math.cos(player.spin*0.5); ctx.scale(fx<0?-1:1,1); }
+  }
+
+  if(r.anchor==='feet'){
+    // skateboard under feet
+    ctx.save(); ctx.rotate(player.face+Math.PI/2);
+    ctx.fillStyle=r.wheels; ctx.beginPath(); ctx.arc(-14,16,4,0,7); ctx.arc(14,16,4,0,7); ctx.fill();
+    ctx.fillStyle=r.deck; roundRect(-22,4,44,10,5); ctx.fill();
+    ctx.fillStyle='#ffffff33'; roundRect(-22,4,44,3,3); ctx.fill();
+    ctx.restore();
+    // rider
+    riderBody(r,false);
+  } else {
+    // scooter: deck + stem + T-bar held by rider
+    ctx.save(); ctx.rotate(player.face+Math.PI/2);
+    ctx.fillStyle=r.wheels; ctx.beginPath(); ctx.arc(0,18,5,0,7); ctx.arc(0,-14,5,0,7); ctx.fill();
+    ctx.strokeStyle=r.deck; ctx.lineWidth=7; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0,16); ctx.lineTo(0,-12); ctx.stroke();     // deck+stem line
+    ctx.beginPath(); ctx.moveTo(0,-12); ctx.lineTo(0,-26); ctx.stroke();    // stem up
+    ctx.beginPath(); ctx.moveTo(-11,-26); ctx.lineTo(11,-26); ctx.stroke(); // T-bar
+    ctx.restore();
+    riderBody(r,true);
+  }
+  ctx.restore();
+}
+function riderBody(r,holdingBars){
+  // legs
+  ctx.strokeStyle='#2a2436'; ctx.lineWidth=5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-5,-4); ctx.lineTo(-6,-18); ctx.moveTo(5,-4); ctx.lineTo(6,-18); ctx.stroke();
+  // body
+  ctx.fillStyle='#ef4d3a'; roundRect(-10,-38,20,24,8); ctx.fill();
+  ctx.fillStyle='#ffffff26'; roundRect(-10,-38,20,6,6); ctx.fill();
+  // arms forward if holding bars
+  if(holdingBars){ ctx.strokeStyle='#ef4d3a'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(-6,-30); ctx.lineTo(-2,-40); ctx.moveTo(6,-30); ctx.lineTo(2,-40); ctx.stroke(); }
+  // head + cap
+  ctx.fillStyle='#f3ceac'; ctx.beginPath(); ctx.arc(0,-46,8,0,7); ctx.fill();
+  ctx.fillStyle=r.deck; ctx.beginPath(); ctx.arc(0,-48,9,Math.PI,0); ctx.fill(); ctx.fillRect(-9,-49,18,3);
+}
+function drawPops(){
+  ctx.textAlign='center';
+  for(var i=0;i<pops.length;i++){ var p=pops[i]; if(!p.t) continue;
+    ctx.globalAlpha=Math.max(0,Math.min(1,p.life)); ctx.font='900 18px ui-sans-serif';
+    ctx.lineWidth=4; ctx.strokeStyle='#00000088'; ctx.strokeText(p.t,p.x,p.y); ctx.fillStyle=p.c; ctx.fillText(p.t,p.x,p.y);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* HUD refresh -------------------------------------------------------------- */
+function refresh(){
+  document.getElementById('hScore').textContent=G.score;
+  var cw=document.getElementById('hComboWrap');
+  if(G.combo>0){ cw.classList.add('on'); document.getElementById('hCombo').textContent='x'+G.combo; } else cw.classList.remove('on');
+  var hb=document.getElementById('heatBar'); hb.firstElementChild.style.width=Math.round(G.heat/HEAT_MAX*100)+'%';
+  hb.classList.toggle('hot', G.heat>=HEAT_MAX);
+}
+
+/* Loop --------------------------------------------------------------------- */
+var last=0, introOpen=true;
+function frame(ts){ if(!last)last=ts; var dt=Math.min(0.05,(ts-last)/1000); last=ts;
+  if(!introOpen) update(dt); draw(); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+document.getElementById('startBtn').addEventListener('click',function(){
+  document.getElementById('intro').classList.add('gone'); introOpen=false; last=0; showBanner('Street Plaza'); curDistrict=0;
+});
+document.getElementById('hRide').textContent=ride().label;
+refresh();
+})();
+</script>
+</body>
+</html>
