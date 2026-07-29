@@ -19,6 +19,12 @@ final class GameScene: SKScene {
     private var sky: SKSpriteNode?
     var garage: GarageStore?           // set by GameView; shared gear state
 
+    // Tilted vantage: the ground plane is foreshortened vertically by `tilt` so we
+    // look ACROSS the world at an angle (2.5D). Upright things (skater, people,
+    // popups) are counter-scaled by 1/tilt so they still stand full-height.
+    private let tilt: CGFloat = 0.75
+    private let playerHolder = SKNode()
+
     // MARK: player state (mirrors `player` in the web build)
     private var px: CGFloat = 300, py: CGFloat = 900
     private var vx: CGFloat = 0, vy: CGFloat = 0
@@ -88,7 +94,7 @@ final class GameScene: SKScene {
         backgroundColor = SKColor(hex: 0x3a2a54)
         scaleMode = .resizeFill
 
-        worldRoot.yScale = -1          // flip into the web build's y-down space
+        worldRoot.yScale = -tilt       // flip + foreshorten the ground plane
         addChild(worldRoot)
 
         // top-down world -> no gravity; ragdolls tumble from impulses + damping
@@ -99,7 +105,7 @@ final class GameScene: SKScene {
         addChild(cameraNode)
         camera = cameraNode
         cameraNode.setScale(1.25)          // zoom out ~25% (HUD/controls are camera children, unaffected)
-        cameraNode.position = CGPoint(x: px, y: z - py)
+        cameraNode.position = CGPoint(x: px, y: z - tilt * py)
         cameraNode.addChild(hud)
         cameraNode.addChild(controls)
 
@@ -120,10 +126,14 @@ final class GameScene: SKScene {
         for rp in World.ramps { worldRoot.addChild(Entities.buildRamp(rp)) }
         for rl in World.rails { worldRoot.addChild(Entities.buildRail(rl)) }
 
+        let up = 1 / tilt   // counter-scale to keep upright things full-height
+
         // scooter pickup in the Bowl
         let pk = Entities.buildPickup()
-        pk.position = CGPoint(x: 3000, y: 900); pk.zPosition = 900
+        pk.position = CGPoint(x: 3000, y: 900); pk.zPosition = 900; pk.yScale = up
         worldRoot.addChild(pk); pickupNode = pk
+
+        guardNode.yScale = up
 
         // pedestrians
         for _ in 0..<22 {
@@ -131,7 +141,7 @@ final class GameScene: SKScene {
             let x = side ? 100 + CGFloat.random(in: 0...1100) : 2300 + CGFloat.random(in: 0...1200)
             let pd = Ped(x: x, y: 120 + CGFloat.random(in: 0...(World.height - 240)),
                          hue: 200 + CGFloat.random(in: 0...140))
-            let n = Entities.buildPed(pd); worldRoot.addChild(n); pd.node = n
+            let n = Entities.buildPed(pd); n.yScale = up; worldRoot.addChild(n); pd.node = n
             peds.append(pd)
         }
 
@@ -149,17 +159,18 @@ final class GameScene: SKScene {
         // collectibles: coin trails + the 5 S-K-A-T-E letters
         for p in World.coinSpots {
             let c = Coin(p); let n = Entities.buildCoin()
-            n.position = CGPoint(x: c.x, y: c.y); n.zPosition = c.y
+            n.position = CGPoint(x: c.x, y: c.y); n.zPosition = c.y; n.yScale = up
             worldRoot.addChild(n); c.node = n; coins.append(c)
         }
         for s in World.letterSpots {
             let l = Letter(s.ch, s.x, s.y); let n = Entities.buildLetter(s.ch)
-            n.position = CGPoint(x: s.x, y: s.y); n.zPosition = s.y
+            n.position = CGPoint(x: s.x, y: s.y); n.zPosition = s.y; n.yScale = up
             worldRoot.addChild(n); l.node = n; letters.append(l)
         }
 
         worldRoot.addChild(playerShadow)
-        worldRoot.addChild(playerRig)
+        playerHolder.yScale = up
+        worldRoot.addChild(playerHolder)
     }
 
     private func wireControls() {
@@ -350,7 +361,7 @@ final class GameScene: SKScene {
         comboScore += (r.trickBase * mult).rounded()
         let label = mult > 1 ? "\(name)!  ×\(Int(mult))" : "\(name)!"
         let color = mult > 1 ? Palette.volt : (r.anchor == .feet ? Palette.coral : Palette.cyan)
-        pop(label, color, px, py - z - 46)
+        pop(label, color, px, py - z / tilt - 46)
         coolHeat(4)
         hud.setCombo(combo)
     }
@@ -584,7 +595,7 @@ final class GameScene: SKScene {
         for l in letters {
             l.taken = false
             let n = Entities.buildLetter(l.ch)
-            n.position = CGPoint(x: l.x, y: l.y); n.zPosition = l.y
+            n.position = CGPoint(x: l.x, y: l.y); n.zPosition = l.y; n.yScale = 1 / tilt
             worldRoot.addChild(n); l.node = n
         }
         hud.setSkate(letters.map { $0.taken })
@@ -603,7 +614,7 @@ final class GameScene: SKScene {
     private func updateCamera(_ dt: CGFloat) {
         // Look ahead in the direction of travel for a more dynamic, 3D-ish feel.
         let lead: CGFloat = reduce ? 0 : 0.18
-        let target = CGPoint(x: px + vx * lead, y: z - py - vy * lead)
+        let target = CGPoint(x: px + vx * lead, y: z - tilt * (py + vy * lead))
         let k = reduce ? 1 : min(1, 6 * dt)
         cameraNode.position = CGPoint(x: cameraNode.position.x + (target.x - cameraNode.position.x) * k,
                                       y: cameraNode.position.y + (target.y - cameraNode.position.y) * k)
@@ -614,6 +625,7 @@ final class GameScene: SKScene {
     private func pop(_ text: String, _ color: SKColor, _ x: CGFloat, _ y: CGFloat) {
         let l = Art.label(text, size: 18, color: color)
         l.position = CGPoint(x: x, y: y); l.zPosition = 6000
+        l.yScale = -1 / tilt        // keep popup text upright on the tilted plane
         worldRoot.addChild(l)
         l.run(.sequence([.group([.moveBy(x: 0, y: -30, duration: 0.9),
                                  .fadeOut(withDuration: 0.9)]),
@@ -628,7 +640,7 @@ final class GameScene: SKScene {
     private func spawnRagdoll(_ style: RagdollStyle, worldX: CGFloat, worldY: CGFloat,
                               dirWorld: CGVector, power: CGFloat, spin: CGFloat, flatten: Bool = false) -> Ragdoll {
         let rag = Ragdoll(style: style)
-        rag.root.position = CGPoint(x: worldX, y: -worldY)
+        rag.root.position = CGPoint(x: worldX, y: -tilt * worldY)   // match the tilted plane
         rag.root.zPosition = worldY
         ragLayer.addChild(rag.root)
         rag.wireJoints(in: physicsWorld)
@@ -705,16 +717,17 @@ final class GameScene: SKScene {
             spark.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
         }
 
-        // rebuild the player rig from live state (cheap: one node)
+        // rebuild the player rig from live state (cheap: one node), inside the
+        // counter-scaled holder so it stands upright on the tilted plane.
+        playerHolder.position = CGPoint(x: px, y: py - z / tilt)   // height stays full-scale
+        playerHolder.zPosition = py
+        playerHolder.isHidden = bailing
         playerRig.removeFromParent()
         let movingNow = onGround && hypot2(vx, vy) > 28
         playerRig = Entities.playerRig(ride: ride(), face: face, spin: spin, flip: flip,
                                        airborne: !onGround, moving: movingNow)
-        playerRig.position = CGPoint(x: px, y: py - z)
-        playerRig.zPosition = py
         playerRig.setScale(1 + z * 0.0011)          // pop toward the camera on air (fake-3D lift)
-        playerRig.isHidden = bailing
-        worldRoot.addChild(playerRig)
+        playerHolder.addChild(playerRig)
 
         // subtle sky parallax -> depth behind the world (stays within the oversized sky)
         sky?.position = CGPoint(x: -cameraNode.position.x * 0.012, y: -cameraNode.position.y * 0.012)
