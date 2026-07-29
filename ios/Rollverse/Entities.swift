@@ -273,6 +273,35 @@ enum Entities {
         return root
     }
 
+    static func buildCoin() -> SKNode {
+        let root = SKNode()
+        let sh = SKShapeNode(ellipseOf: CGSize(width: 18, height: 7))
+        sh.fillColor = SKColor(white: 0, alpha: 0.25); sh.strokeColor = .clear; sh.position = CGPoint(x: 0, y: 4)
+        root.addChild(sh)
+        let coin = SKNode(); coin.position = CGPoint(x: 0, y: -9)
+        coin.addChild(Art.circle(0, 0, 10, Palette.gold))
+        coin.addChild(Art.circle(0, 0, 6, SKColor(hex: 0xffe89a)))
+        root.addChild(coin)
+        coin.run(.repeatForever(.sequence([.scaleX(to: 0.25, duration: 0.45), .scaleX(to: 1, duration: 0.45)])))  // spin
+        root.run(.repeatForever(.sequence([.moveBy(x: 0, y: -4, duration: 0.5), .moveBy(x: 0, y: 4, duration: 0.5)])))
+        return root
+    }
+
+    static func buildLetter(_ ch: String) -> SKNode {
+        let root = SKNode()
+        let sh = SKShapeNode(ellipseOf: CGSize(width: 30, height: 11))
+        sh.fillColor = SKColor(white: 0, alpha: 0.28); sh.strokeColor = .clear
+        root.addChild(sh)
+        let tile = SKNode(); tile.position = CGPoint(x: 0, y: -28)
+        let box = SKShapeNode(path: Art.roundRectPath(-17, -21, 34, 42, 9))
+        box.fillColor = Palette.coral; box.strokeColor = SKColor(white: 1, alpha: 0.5); box.lineWidth = 2
+        tile.addChild(box)
+        tile.addChild(Art.label(ch, size: 26, color: .white, font: "AvenirNext-Heavy"))
+        root.addChild(tile)
+        tile.run(.repeatForever(.sequence([.moveBy(x: 0, y: -6, duration: 0.6), .moveBy(x: 0, y: 6, duration: 0.6)])))
+        return root
+    }
+
     static func buildPed(_ pd: Ped) -> SKNode {
         let root = SKNode()
         // shadow

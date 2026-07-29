@@ -63,6 +63,21 @@ enum World {
     struct Pyramid { let x, y, w, h: CGFloat }
     static let pyramids: [Pyramid] = [ Pyramid(x: 2900, y: 300, w: 360, h: 240) ]
 
+    // COLLECTIBLES — coins (currency) scattered as trails, and the 5 S-K-A-T-E letters.
+    static let coinSpots: [CGPoint] = [
+        CGPoint(x: 220, y: 900), CGPoint(x: 320, y: 820), CGPoint(x: 420, y: 760),
+        CGPoint(x: 600, y: 820), CGPoint(x: 700, y: 900), CGPoint(x: 820, y: 900),
+        CGPoint(x: 980, y: 640), CGPoint(x: 900, y: 1160), CGPoint(x: 760, y: 1040),
+        CGPoint(x: 470, y: 300), CGPoint(x: 1180, y: 640), CGPoint(x: 1160, y: 1150),
+        CGPoint(x: 2500, y: 520), CGPoint(x: 2680, y: 760), CGPoint(x: 2800, y: 820),
+        CGPoint(x: 3000, y: 760), CGPoint(x: 3100, y: 700), CGPoint(x: 3300, y: 760),
+        CGPoint(x: 3350, y: 1080), CGPoint(x: 2450, y: 1080), CGPoint(x: 3080, y: 420),
+        CGPoint(x: 2900, y: 1050),
+    ]
+    static let letterSpots: [(ch: String, x: CGFloat, y: CGFloat)] = [
+        ("S", 520, 480), ("K", 1080, 1150), ("A", 2380, 520), ("T", 2800, 820), ("E", 3320, 1080),
+    ]
+
     // Trick zones (score multiplier).
     struct Zone { let x, y, r: CGFloat; let mult: CGFloat }
     static let zones: [Zone] = [
@@ -109,3 +124,13 @@ final class Car {
 }
 
 struct Guard { var x, y: CGFloat }
+
+final class Coin {
+    let x, y: CGFloat; var taken = false; var node: SKNode?
+    init(_ p: CGPoint) { x = p.x; y = p.y }
+}
+
+final class Letter {
+    let ch: String; let x, y: CGFloat; var taken = false; var node: SKNode?
+    init(_ ch: String, _ x: CGFloat, _ y: CGFloat) { self.ch = ch; self.x = x; self.y = y }
+}

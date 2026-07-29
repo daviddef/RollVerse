@@ -50,6 +50,9 @@ final class GameScene: SKScene {
     private var guardNode = Entities.buildGuard()
     private var pickupTaken = false
     private var pickupNode: SKNode?
+    private var coins: [Coin] = []
+    private var letters: [Letter] = []
+    private var coinCount = 0
 
     // MARK: player nodes
     private let playerShadow: SKShapeNode = {
@@ -65,6 +68,7 @@ final class GameScene: SKScene {
     private var skaterRagdoll: Ragdoll?
 
     private var boostCd: CGFloat = 0    // cooldown so a pad fires once per crossing
+    private var boostTimer: CGFloat = 0 // while >0 the speed cap is raised (the boost holds)
 
     // MARK: input buffers (edge-triggered, like jumpBuf/trickBuf/switchBuf)
     private var jumpBuf = false, trickBuf = false, switchBuf = false
@@ -104,7 +108,7 @@ final class GameScene: SKScene {
         layoutForSize(size)
 
         hud.setScore(0); hud.setRide(ride().label); hud.setHeat(0, max: HEAT_MAX)
-        hud.setCombo(0)
+        hud.setCombo(0); hud.setCoins(0); hud.setSkate([false, false, false, false, false])
     }
 
     private func buildWorld() {
@@ -140,6 +144,18 @@ final class GameScene: SKScene {
                          col: SKColor.hsl(CGFloat.random(in: 0...360), 0.65, 0.55))
             let n = Entities.buildCar(ca); worldRoot.addChild(n); ca.node = n
             cars.append(ca)
+        }
+
+        // collectibles: coin trails + the 5 S-K-A-T-E letters
+        for p in World.coinSpots {
+            let c = Coin(p); let n = Entities.buildCoin()
+            n.position = CGPoint(x: c.x, y: c.y); n.zPosition = c.y
+            worldRoot.addChild(n); c.node = n; coins.append(c)
+        }
+        for s in World.letterSpots {
+            let l = Letter(s.ch, s.x, s.y); let n = Entities.buildLetter(s.ch)
+            n.position = CGPoint(x: s.x, y: s.y); n.zPosition = s.y
+            worldRoot.addChild(n); l.node = n; letters.append(l)
         }
 
         worldRoot.addChild(playerShadow)
@@ -207,8 +223,9 @@ final class GameScene: SKScene {
         let t = dt
 
         // movement (topSpeed / turn / roll come from the geared setup)
+        if boostTimer > 0 { boostTimer -= t }
         let inp = moveInput()
-        let target = eff.topSpeed
+        let target = boostTimer > 0 ? 900 : eff.topSpeed     // boost raises the cap so it holds
         let a = onGround ? eff.accel : eff.accel * 0.5
         if inp.mag > 0.1 {
             let tvx = inp.x * target * inp.mag, tvy = inp.y * target * inp.mag
@@ -241,17 +258,20 @@ final class GameScene: SKScene {
             vz -= r.gravity * t; z += vz * t; spin += spinRate * t
             if z <= 0 {
                 z = 0; onGround = true; vz = 0; spin = 0; flip = false; spinRate = 0
-                landCombo(); tryGrindOnLand()
+                landCombo(); tryStartGrind()
             }
         }
+
+        // ride onto a rail/bench at speed -> start grinding (no ollie required)
+        if onGround && !grinding { tryStartGrind() }
 
         // accelerator pads -> big speed boost along the arrows
         if boostCd > 0 { boostCd -= dt }
         if onGround && !grinding && boostCd <= 0 {
-            for bo in World.boosters where abs(px - bo.x) < bo.len / 2 + 10 && abs(py - bo.y) < 44 {
-                let boost: CGFloat = 820
+            for bo in World.boosters where abs(px - bo.x) < bo.len / 2 + 12 && abs(py - bo.y) < 46 {
+                let boost: CGFloat = 1050
                 vx = cos(bo.dir) * boost; vy = sin(bo.dir) * boost
-                face = bo.dir; boostCd = 0.5
+                face = bo.dir; boostCd = 0.6; boostTimer = 1.2   // launch fast + hold the speed
                 pop("BOOST!", Palette.volt, px, py - 40)
                 break
             }
@@ -287,6 +307,7 @@ final class GameScene: SKScene {
         }
 
         updatePeds(t); updateCars(t); updateGuard(t)
+        updateCollectibles()
         if heat > 0 { coolHeatSilent(6 * dt) }
         announceDistrict()
         updateCamera(dt)
@@ -325,8 +346,11 @@ final class GameScene: SKScene {
             spinRate = (Bool.random() ? 1 : -1) * CGFloat.random(in: 9...13)
             flip = false
         }
-        comboScore += (r.trickBase * zoneMult(px, py)).rounded()
-        pop("\(name)!", r.anchor == .feet ? Palette.coral : Palette.cyan, px, py - z - 46)
+        let mult = zoneMult(px, py)
+        comboScore += (r.trickBase * mult).rounded()
+        let label = mult > 1 ? "\(name)!  ×\(Int(mult))" : "\(name)!"
+        let color = mult > 1 ? Palette.volt : (r.anchor == .feet ? Palette.coral : Palette.cyan)
+        pop(label, color, px, py - z - 46)
         coolHeat(4)
         hud.setCombo(combo)
     }
@@ -354,11 +378,11 @@ final class GameScene: SKScene {
 
     // MARK: grinds
 
-    private func tryGrindOnLand() {
+    private func tryStartGrind() {
         for rl in World.rails {
             let cy = rl.y + rl.h / 2
             if px > rl.x - 10 && px < rl.x + rl.w + 10 &&
-                abs(py - cy) < rl.h / 2 + 14 && hypot2(vx, vy) > 60 {
+                abs(py - cy) < rl.h / 2 + 22 && hypot2(vx, vy) > 60 {
                 startGrind(rl); return
             }
         }
@@ -385,13 +409,37 @@ final class GameScene: SKScene {
     }
     private func coolHeat(_ n: CGFloat) {
         heat = max(0, heat - n)
-        if guard_ != nil && heat < 45 { removeGuard(); pop("Guard gave up!", Palette.volt, px, py - 60) }
+        if guard_ != nil && heat < 45 { guardEscaped() }
         hud.setHeat(heat, max: HEAT_MAX)
     }
     private func coolHeatSilent(_ n: CGFloat) {
         heat = max(0, heat - n)
-        if guard_ != nil && heat < 45 { removeGuard() }
+        if guard_ != nil && heat < 45 { guardEscaped() }
         hud.setHeat(heat, max: HEAT_MAX)
+    }
+    private func guardEscaped() {
+        guard guard_ != nil else { return }
+        removeGuard()
+        addScore(150)
+        pop("YOU LOST THE COPS!  +150", Palette.volt, px, py - 70)
+        celebrate(px, py)
+    }
+
+    /// A little confetti burst for wins (escaping the cops, S-K-A-T-E, etc.).
+    private func celebrate(_ x: CGFloat, _ y: CGFloat) {
+        let colors = [Palette.coral, Palette.volt, Palette.cyan, Palette.gold, Palette.violet]
+        for _ in 0..<22 {
+            let c = SKShapeNode(rectOf: CGSize(width: 5, height: 8), cornerRadius: 1.5)
+            c.fillColor = colors.randomElement()!; c.strokeColor = .clear
+            c.position = CGPoint(x: x, y: y - 30); c.zPosition = 7000
+            c.zRotation = CGFloat.random(in: 0...6.28)
+            worldRoot.addChild(c)
+            let ang = CGFloat.random(in: 0...6.28), dist = CGFloat.random(in: 40...150)
+            c.run(.sequence([.group([.moveBy(x: cos(ang) * dist, y: -sin(ang) * dist - 40, duration: 0.7),
+                                     .rotate(byAngle: CGFloat.random(in: -6...6), duration: 0.7),
+                                     .fadeOut(withDuration: 0.7)]),
+                             .removeFromParent()]))
+        }
     }
     private func spawnGuard() {
         let s: CGFloat = vx != 0 ? sign1(vx) : 1
@@ -498,6 +546,48 @@ final class GameScene: SKScene {
         g.x += dx / d * gs * t; g.y += dy / d * gs * t
         guard_ = g
         if d < 30 { goToJail() }
+    }
+
+    // MARK: collectibles (coins + S-K-A-T-E)
+
+    private func updateCollectibles() {
+        for c in coins where !c.taken {
+            if hypot2(px - c.x, py - c.y) < 26 {
+                c.taken = true
+                c.node?.run(.sequence([.group([.scale(to: 1.6, duration: 0.2), .fadeOut(withDuration: 0.2)]), .removeFromParent()]))
+                coinCount += 1; garage?.coins = coinCount; hud.setCoins(coinCount)
+                addScore(10)
+                pop("+1", Palette.gold, c.x, c.y - 20)
+            }
+        }
+        for l in letters where !l.taken {
+            if hypot2(px - l.x, py - l.y) < 30 {
+                l.taken = true
+                l.node?.run(.sequence([.group([.scale(to: 1.8, duration: 0.25), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
+                addScore(50)
+                pop("\(l.ch)!", Palette.coral, l.x, l.y - 34)
+                hud.setSkate(letters.map { $0.taken })
+                if letters.allSatisfy({ $0.taken }) { skateComplete() }
+            }
+        }
+    }
+
+    private func skateComplete() {
+        coinCount += 25; garage?.coins = coinCount; hud.setCoins(coinCount)
+        addScore(500)
+        pop("S-K-A-T-E!  +25 coins", Palette.volt, px, py - 80)
+        celebrate(px, py)
+        run(.sequence([.wait(forDuration: 2.2), .run { [weak self] in self?.respawnLetters() }]))
+    }
+
+    private func respawnLetters() {
+        for l in letters {
+            l.taken = false
+            let n = Entities.buildLetter(l.ch)
+            n.position = CGPoint(x: l.x, y: l.y); n.zPosition = l.y
+            worldRoot.addChild(n); l.node = n
+        }
+        hud.setSkate(letters.map { $0.taken })
     }
 
     // MARK: districts

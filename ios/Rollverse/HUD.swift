@@ -13,7 +13,12 @@ final class HUD: SKNode {
     // Chips
     private let scoreChip = ChipNode(key: "SCORE", valueColor: Palette.volt, mono: true)
     private let comboChip = ChipNode(key: "COMBO", valueColor: Palette.coral, mono: true)
+    private let coinsChip = ChipNode(key: "COINS", valueColor: Palette.gold, mono: true)
     private let rideChip  = ChipNode(key: "RIDING", valueColor: Palette.cyan, mono: false, small: true)
+
+    // S-K-A-T-E progress
+    private let skateNode = SKNode()
+    private var skateLabels: [SKLabelNode] = []
 
     // Heat
     private let heatChip = SKShapeNode()
@@ -43,8 +48,15 @@ final class HUD: SKNode {
     required init?(coder: NSCoder) { fatalError() }
 
     private func build() {
-        addChild(scoreChip); addChild(comboChip); addChild(rideChip)
+        addChild(scoreChip); addChild(comboChip); addChild(coinsChip); addChild(rideChip)
         comboChip.isHidden = true
+
+        for ch in ["S", "K", "A", "T", "E"] {
+            let l = Art0.label(ch, size: 15, color: SKColor(white: 1, alpha: 0.22), font: "AvenirNext-Heavy")
+            l.horizontalAlignmentMode = .left
+            skateLabels.append(l); skateNode.addChild(l)
+        }
+        addChild(skateNode)
 
         heatBarBG.fillColor = SKColor(white: 1, alpha: 0.15); heatBarBG.strokeColor = .clear
         heatBarFill.fillColor = Palette.coral; heatBarFill.strokeColor = .clear
@@ -73,9 +85,13 @@ final class HUD: SKNode {
         let top = s.height / 2 - pad
 
         scoreChip.position = CGPoint(x: left + scoreChip.halfWidth, y: top - 16)
-        comboChip.position = CGPoint(x: scoreChip.position.x + scoreChip.halfWidth + 8 + comboChip.halfWidth, y: top - 16)
-        let afterCombo = comboChip.isHidden ? scoreChip.position.x + scoreChip.halfWidth : comboChip.position.x + comboChip.halfWidth
+        coinsChip.position = CGPoint(x: scoreChip.position.x + scoreChip.halfWidth + 8 + coinsChip.halfWidth, y: top - 16)
+        comboChip.position = CGPoint(x: coinsChip.position.x + coinsChip.halfWidth + 8 + comboChip.halfWidth, y: top - 16)
+        let afterCombo = comboChip.isHidden ? coinsChip.position.x + coinsChip.halfWidth : comboChip.position.x + comboChip.halfWidth
         rideChip.position = CGPoint(x: afterCombo + 8 + rideChip.halfWidth, y: top - 16)
+
+        skateNode.position = CGPoint(x: left + 4, y: top - 44)
+        for (i, l) in skateLabels.enumerated() { l.position = CGPoint(x: CGFloat(i) * 20, y: 0) }
 
         heatChip.position = CGPoint(x: rideChip.position.x + rideChip.halfWidth + 12 + 60, y: top - 16)
         heatKey.position = CGPoint(x: -60, y: 0)
@@ -92,6 +108,14 @@ final class HUD: SKNode {
     // MARK: dynamic setters
 
     func setScore(_ v: Int) { scoreChip.setValue("\(v)") }
+
+    func setCoins(_ v: Int) { coinsChip.setValue("\(v)"); layout(size) }
+
+    func setSkate(_ got: [Bool]) {
+        for (i, l) in skateLabels.enumerated() where i < got.count {
+            l.fontColor = got[i] ? Palette.volt : SKColor(white: 1, alpha: 0.22)
+        }
+    }
 
     func setCombo(_ v: Int) {
         if v > 0 {

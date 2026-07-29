@@ -10,6 +10,7 @@ final class GarageStore: ObservableObject {
     @Published var skateSetup = Setup()
     @Published var scooterSetup = Setup()
     @Published var currentRide = "skateboard"     // the scene keeps this in sync
+    @Published var coins = 0                       // wallet (future shop currency)
 
     enum Dial { case deck, wheels, trucks, bearings }
 
