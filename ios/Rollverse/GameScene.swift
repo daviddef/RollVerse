@@ -63,6 +63,8 @@ final class GameScene: SKScene {
     private var bailTimer: CGFloat = 0
     private var skaterRagdoll: Ragdoll?
 
+    private var boostCd: CGFloat = 0    // cooldown so a pad fires once per crossing
+
     // MARK: input buffers (edge-triggered, like jumpBuf/trickBuf/switchBuf)
     private var jumpBuf = false, trickBuf = false, switchBuf = false
 
@@ -106,6 +108,9 @@ final class GameScene: SKScene {
     private func buildWorld() {
         worldRoot.addChild(Entities.buildGround())
         for z in World.zones { worldRoot.addChild(Entities.buildZone(z)) }
+        for bo in World.boosters { worldRoot.addChild(Entities.buildBooster(bo)) }
+        for fb in World.funboxes { worldRoot.addChild(Entities.buildFunbox(fb)) }
+        for py in World.pyramids { worldRoot.addChild(Entities.buildPyramid(py)) }
         for rp in World.ramps { worldRoot.addChild(Entities.buildRamp(rp)) }
         for rl in World.rails { worldRoot.addChild(Entities.buildRail(rl)) }
 
@@ -229,12 +234,32 @@ final class GameScene: SKScene {
             }
         }
 
-        // ramps -> launch
+        // accelerator pads -> big speed boost along the arrows
+        if boostCd > 0 { boostCd -= dt }
+        if onGround && !grinding && boostCd <= 0 {
+            for bo in World.boosters where abs(px - bo.x) < bo.len / 2 + 10 && abs(py - bo.y) < 44 {
+                let boost: CGFloat = 820
+                vx = cos(bo.dir) * boost; vy = sin(bo.dir) * boost
+                face = bo.dir; boostCd = 0.5
+                pop("BOOST!", Palette.volt, px, py - 40)
+                break
+            }
+        }
+
+        // proper ramps -> launch into the air (quarter pipes launch highest)
         if onGround && !grinding {
             let sp = hypot2(vx, vy)
-            for rp in World.ramps where abs(px - rp.x) < 74 && abs(py - rp.y) < 74 && sp > 150 {
-                vz = r.jumpPower * 1.5; onGround = false
-                pop("RAMP!", Palette.cyan, px, py - 40)
+            for rp in World.ramps where abs(px - rp.x) < rp.w / 2 + 24 && abs(py - rp.y) < rp.h / 2 + 24 && sp > 150 {
+                vz = r.jumpPower * (rp.kind == .quarter ? 2.1 : 1.7); onGround = false
+                pop(rp.kind == .quarter ? "QUARTER PIPE!" : "RAMP!", Palette.cyan, px, py - 40)
+                break
+            }
+            // ride up a pyramid slope to pop off the top
+            for pm in World.pyramids
+                where px > pm.x && px < pm.x + pm.w && py > pm.y && py < pm.y + pm.h && sp > 160 {
+                vz = r.jumpPower * 1.6; onGround = false
+                pop("PYRAMID!", Palette.cyan, px, pm.y - 20)
+                break
             }
         }
 
@@ -421,7 +446,8 @@ final class GameScene: SKScene {
             if ca.y > World.height + 40 { ca.y = -40 }
             if ca.y < -40 { ca.y = World.height + 40 }
             let dx = px - ca.x, dy = py - ca.y
-            if abs(dx) < 34 && abs(dy) < 52 && z < 30 {
+            let over = abs(dx) < 34 && abs(dy) < 52
+            if over && z < 30 {                            // grounded -> you get clipped
                 if !ca.hit {
                     ca.hit = true
                     let b = max(hypot2(dx, dy), 1)
@@ -432,7 +458,13 @@ final class GameScene: SKScene {
                     pop("CAR! -40", Palette.coral, px, py - 40)
                     startBail(dirX: dx, dirY: dy)          // the skater eats it, ragdoll flies
                 }
-            } else { ca.hit = false }
+            } else if over && z >= 30 {                    // airborne -> you cleared it!
+                if !ca.hopped {
+                    ca.hopped = true
+                    addScore(25); coolHeat(3)
+                    pop("CAR HOP! +25", Palette.cyan, px, py - z - 46)
+                }
+            } else { ca.hit = false; ca.hopped = false }
 
             // cars flatten pedestrians who wander into the road (ambient slapstick)
             for pd in peds where !pd.downed {

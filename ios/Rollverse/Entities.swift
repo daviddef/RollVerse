@@ -143,29 +143,92 @@ enum Entities {
         return root
     }
 
+    /// A proper ramp — a kicker (or quarter pipe): footprint with an inclined face
+    /// (fake-shaded darker at the base, lighter toward the lip) and a bright coping.
+    /// Local +x is the launch direction (root is rotated by `dir`).
     static func buildRamp(_ r: World.Ramp) -> SKNode {
         let root = SKNode()
         root.position = CGPoint(x: r.x, y: r.y)
         root.zRotation = r.dir
         root.zPosition = -500
+        let w = r.w, h = r.h
 
-        let tri = CGMutablePath()
-        tri.move(to: CGPoint(x: -r.len / 2, y: 34))
-        tri.addLine(to: CGPoint(x: r.len / 2, y: -30))
-        tri.addLine(to: CGPoint(x: r.len / 2, y: 34))
-        tri.closeSubpath()
-        let ramp = SKShapeNode(path: tri)
-        ramp.fillColor = Palette.coral; ramp.strokeColor = Palette.gold; ramp.lineWidth = 3
-        root.addChild(ramp)
-
-        for c in -1...1 {
-            let chev = CGMutablePath()
-            chev.move(to: CGPoint(x: CGFloat(c) * 34 - 8, y: 20))
-            chev.addLine(to: CGPoint(x: CGFloat(c) * 34 + 8, y: 2))
-            chev.addLine(to: CGPoint(x: CGFloat(c) * 34 - 8, y: -16))
-            let n = SKShapeNode(path: chev); n.strokeColor = SKColor(white: 1, alpha: 0.67); n.lineWidth = 4; n.fillColor = .clear
-            root.addChild(n)
+        // footprint shadow
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + 6, w, h, 12, SKColor(white: 0, alpha: 0.22)))
+        // ramp deck base
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 12, SKColor(hex: 0x322c46)))
+        // incline bands (dark at the base -> light toward the lip)
+        let bandColors: [UInt32] = [0x3c355a, 0x4d4670, 0x655d8c, 0x8079a6]
+        let bw = w / CGFloat(bandColors.count + 1)
+        for (i, c) in bandColors.enumerated() {
+            let x = -w / 2 + bw * CGFloat(i + 1)
+            root.addChild(Art.fillRoundRect(x, -h / 2 + 6, bw + 2, h - 12, 4, SKColor(hex: c)))
         }
+        // bright coping / lip at the launch edge
+        if r.kind == .quarter {
+            // curved coping
+            let p = CGMutablePath()
+            p.addArc(center: CGPoint(x: w / 2 - 14, y: 0), radius: h / 2,
+                     startAngle: -.pi / 2, endAngle: .pi / 2, clockwise: false)
+            let arc = SKShapeNode(path: p); arc.strokeColor = Palette.gold; arc.lineWidth = 7; arc.fillColor = .clear; arc.lineCap = .round
+            root.addChild(arc)
+        }
+        root.addChild(Art.fillRoundRect(w / 2 - 10, -h / 2, 8, h, 4, Palette.gold))
+        // side rails
+        root.addChild(Art.fillRect(-w / 2, -h / 2, w, 3, SKColor(white: 1, alpha: 0.10)))
+        root.addChild(Art.fillRect(-w / 2, h / 2 - 3, w, 3, SKColor(white: 0, alpha: 0.18)))
+        return root
+    }
+
+    /// An accelerator pad — the chevron speed strip. Local +x is the boost direction.
+    static func buildBooster(_ b: World.Booster) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: b.x, y: b.y)
+        root.zRotation = b.dir
+        root.zPosition = -450
+        let len = b.len
+
+        let pad = Art.fillRoundRect(-len / 2, -26, len, 52, 16, SKColor(hex: 0xc6ff42, alpha: 0.14))
+        let ring = SKShapeNode(path: Art.roundRectPath(-len / 2, -26, len, 52, 16))
+        ring.strokeColor = SKColor(hex: 0xc6ff42, alpha: 0.55); ring.lineWidth = 2; ring.fillColor = .clear
+        root.addChild(pad); root.addChild(ring)
+
+        let chevrons = SKNode()
+        for i in 0..<3 {
+            let x = -len / 2 + 34 + CGFloat(i) * 38
+            let p = CGMutablePath()
+            p.move(to: CGPoint(x: x - 9, y: -15)); p.addLine(to: CGPoint(x: x + 9, y: 0)); p.addLine(to: CGPoint(x: x - 9, y: 15))
+            let n = SKShapeNode(path: p); n.strokeColor = Palette.volt; n.lineWidth = 6; n.lineCap = .round; n.lineJoin = .round; n.fillColor = .clear
+            chevrons.addChild(n)
+        }
+        root.addChild(chevrons)
+        chevrons.run(.repeatForever(.sequence([.fadeAlpha(to: 0.45, duration: 0.5),
+                                               .fadeAlpha(to: 1.0, duration: 0.5)])))
+        return root
+    }
+
+    /// A raised funbox (its top edge is a grindable ledge added in World.rails).
+    static func buildFunbox(_ f: World.Funbox) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: f.x + f.w / 2, y: f.y + f.h / 2)
+        root.zPosition = -480
+        let w = f.w, h = f.h
+        root.addChild(Art.fillRoundRect(-w / 2, h / 2 - 4, w, 28, 12, SKColor(hex: 0x2c2740)))  // front skirt (height)
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 16, SKColor(hex: 0x746e8c)))       // top face
+        root.addChild(Art.fillRoundRect(-w / 2 + 8, -h / 2 + 8, w - 16, 8, 6, SKColor(white: 1, alpha: 0.12)))
+        return root
+    }
+
+    /// A banked pyramid (concentric tiers). Top ledge grindable via World.rails.
+    static func buildPyramid(_ p: World.Pyramid) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: p.x + p.w / 2, y: p.y + p.h / 2)
+        root.zPosition = -490
+        let w = p.w, h = p.h
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + 8, w, h, 20, SKColor(white: 0, alpha: 0.18)))       // shadow
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 20, SKColor(hex: 0x4a4368)))                    // base bank
+        root.addChild(Art.fillRoundRect(-w * 0.35, -h * 0.35, w * 0.70, h * 0.70, 16, SKColor(hex: 0x655d8c)))// mid
+        root.addChild(Art.fillRoundRect(-w * 0.21, -h * 0.21, w * 0.42, h * 0.42, 12, SKColor(hex: 0x847da8)))// top flat
         return root
     }
 

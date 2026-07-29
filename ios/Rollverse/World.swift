@@ -24,22 +24,44 @@ enum World {
     ]
 
     // Grind rails / ledges (street): long thin boxes. Land low + moving => grind.
+    // (Funbox / pyramid top ledges are added here too so grinding works on them.)
     struct Rail { let x, y, w, h: CGFloat; let col: SKColor; let pad: Bool }
     static let rails: [Rail] = [
         Rail(x: 260,  y: 640,  w: 360, h: 26, col: SKColor(hex: 0xc9c1e6), pad: false), // plaza ledge
         Rail(x: 760,  y: 1040, w: 300, h: 22, col: Palette.gold,           pad: false), // plaza rail
         Rail(x: 420,  y: 1120, w: 220, h: 60, col: SKColor(hex: 0x8a7fb0), pad: true),  // manual pad
         Rail(x: 2500, y: 520,  w: 340, h: 24, col: SKColor(hex: 0xc9c1e6), pad: false), // bowl-side ledge
+        Rail(x: 470,  y: 300,  w: 280, h: 18, col: Palette.gold,           pad: false), // funbox coping
+        Rail(x: 2980, y: 420,  w: 200, h: 16, col: Palette.cyan,           pad: false), // pyramid coping
     ]
 
-    // Ramps (launch): ride in fast on the ground => big air.
-    struct Ramp { let x, y, dir, len: CGFloat }
-    static let ramps: [Ramp] = [
-        Ramp(x: 980,  y: 760,  dir: 0.2,             len: 150),
-        Ramp(x: 2450, y: 1080, dir: .pi,             len: 170),
-        Ramp(x: 2900, y: 640,  dir: -.pi / 2,        len: 170),
-        Ramp(x: 3200, y: 1080, dir: .pi * 0.85,      len: 170),
+    // ACCELERATOR PADS (the chevron speed strips) — cross one and you get flung
+    // along the arrows at high speed. `dir` is the launch direction.
+    struct Booster { let x, y, dir, len: CGFloat }
+    static let boosters: [Booster] = [
+        Booster(x: 760,  y: 900,  dir: 0,        len: 160), // plaza -> toward the road
+        Booster(x: 1750, y: 700,  dir: 0,        len: 190), // blast across the road
+        Booster(x: 2680, y: 760,  dir: 0,        len: 160), // into the bowl
+        Booster(x: 900,  y: 1160, dir: -.pi / 2, len: 150), // shoot upward
     ]
+
+    // PROPER RAMPS — kickers and a quarter pipe. Hit them with speed to launch big.
+    enum RampKind { case kicker, quarter }
+    struct Ramp { let x, y, dir, w, h: CGFloat; let kind: RampKind }
+    static let ramps: [Ramp] = [
+        Ramp(x: 1080, y: 600,  dir: 0,        w: 96,  h: 72, kind: .kicker),
+        Ramp(x: 1000, y: 1180, dir: .pi,      w: 96,  h: 72, kind: .kicker),
+        Ramp(x: 2450, y: 1080, dir: .pi,      w: 104, h: 78, kind: .kicker),
+        Ramp(x: 3350, y: 720,  dir: -.pi / 2, w: 160, h: 104, kind: .quarter),
+    ]
+
+    // FUNBOXES — raised boxes; the top edge is a grindable ledge (see rails).
+    struct Funbox { let x, y, w, h: CGFloat }
+    static let funboxes: [Funbox] = [ Funbox(x: 450, y: 250, w: 320, h: 190) ]
+
+    // PYRAMIDS — banked mounds; grind the top, or ride the slope to pop off it.
+    struct Pyramid { let x, y, w, h: CGFloat }
+    static let pyramids: [Pyramid] = [ Pyramid(x: 2900, y: 300, w: 360, h: 240) ]
 
     // Trick zones (score multiplier).
     struct Zone { let x, y, r: CGFloat; let mult: CGFloat }
@@ -79,6 +101,7 @@ final class Car {
     var x, y, dir, spd: CGFloat
     let col: SKColor
     var hit = false
+    var hopped = false
     var node: SKNode?
     init(x: CGFloat, y: CGFloat, dir: CGFloat, spd: CGFloat, col: SKColor) {
         self.x = x; self.y = y; self.dir = dir; self.spd = spd; self.col = col
