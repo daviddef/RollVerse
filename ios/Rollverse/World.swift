@@ -25,14 +25,14 @@ enum World {
 
     // Grind rails / ledges (street): long thin boxes. Land low + moving => grind.
     // (Funbox / pyramid top ledges are added here too so grinding works on them.)
-    struct Rail { let x, y, w, h: CGFloat; let col: SKColor; let pad: Bool }
+    struct Rail { let x, y, w, h: CGFloat; let col: SKColor; let pad: Bool; let name: String }
     static let rails: [Rail] = [
-        Rail(x: 260,  y: 640,  w: 360, h: 26, col: SKColor(hex: 0xc9c1e6), pad: false), // plaza ledge
-        Rail(x: 760,  y: 1040, w: 300, h: 22, col: Palette.gold,           pad: false), // plaza rail
-        Rail(x: 420,  y: 1120, w: 220, h: 60, col: SKColor(hex: 0x8a7fb0), pad: true),  // manual pad
-        Rail(x: 2500, y: 520,  w: 340, h: 24, col: SKColor(hex: 0xc9c1e6), pad: false), // bowl-side ledge
-        Rail(x: 470,  y: 300,  w: 280, h: 18, col: Palette.gold,           pad: false), // funbox coping
-        Rail(x: 2980, y: 420,  w: 200, h: 16, col: Palette.cyan,           pad: false), // pyramid coping
+        Rail(x: 260,  y: 640,  w: 360, h: 26, col: SKColor(hex: 0xc9c1e6), pad: false, name: "LEDGE"),
+        Rail(x: 760,  y: 1040, w: 300, h: 22, col: Palette.gold,           pad: false, name: "RAIL"),
+        Rail(x: 420,  y: 1120, w: 220, h: 60, col: SKColor(hex: 0x8a7fb0), pad: true,  name: "MANUAL PAD"),
+        Rail(x: 2500, y: 520,  w: 340, h: 24, col: SKColor(hex: 0xc9c1e6), pad: false, name: "LEDGE"),
+        Rail(x: 470,  y: 300,  w: 280, h: 18, col: Palette.gold,           pad: false, name: ""), // funbox coping
+        Rail(x: 2980, y: 420,  w: 200, h: 16, col: Palette.cyan,           pad: false, name: ""), // pyramid coping
     ]
 
     // ACCELERATOR PADS (the chevron speed strips) — cross one and you get flung
@@ -72,11 +72,17 @@ enum World {
     ]
 
     // TUNNELS — skate through one while the cops chase you and you lose them.
+    // Wide + tall so you clearly fit through; you duck under the roof and vanish.
     struct Tunnel { let x, y, w, h: CGFloat }
     static let tunnels: [Tunnel] = [
-        Tunnel(x: 1440, y: 250, w: 500, h: 210),      // over the road
-        Tunnel(x: 3000, y: 1120, w: 420, h: 210),     // bowl underpass
+        Tunnel(x: 300,  y: 380,  w: 300, h: 380),     // plaza, right by the start
+        Tunnel(x: 1420, y: 300,  w: 520, h: 360),     // over the road
+        Tunnel(x: 2950, y: 1040, w: 460, h: 360),     // bowl underpass
     ]
+
+    // Crosswalk band (where cars yield to pedestrians).
+    static let crossY: CGFloat = 850
+    static let crossHalf: CGFloat = 70
 
     // COLLECTIBLES — coins (currency) scattered as trails, and the 5 S-K-A-T-E letters.
     static let coinSpots: [CGPoint] = [
@@ -148,4 +154,16 @@ final class Coin {
 final class Letter {
     let ch: String; let x, y: CGFloat; var taken = false; var node: SKNode?
     init(_ ch: String, _ x: CGFloat, _ y: CGFloat) { self.ch = ch; self.x = x; self.y = y }
+}
+
+// Roaming dogs & cats — wander, and scurry away when the skater gets close.
+final class Animal {
+    var x, y: CGFloat
+    let dog: Bool
+    let hue: CGFloat
+    var tx: CGFloat = 0, ty: CGFloat = 0
+    var timer: CGFloat = 0
+    var vx: CGFloat = 0, vy: CGFloat = 0
+    var node: SKNode?
+    init(x: CGFloat, y: CGFloat, dog: Bool, hue: CGFloat) { self.x = x; self.y = y; self.dog = dog; self.hue = hue }
 }

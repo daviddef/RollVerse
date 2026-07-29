@@ -58,6 +58,7 @@ final class GameScene: SKScene {
     private var pickupNode: SKNode?
     private var coins: [Coin] = []
     private var letters: [Letter] = []
+    private var animals: [Animal] = []
     private var coinCount = 0
 
     // MARK: player nodes
@@ -131,6 +132,14 @@ final class GameScene: SKScene {
         for rp in World.ramps { worldRoot.addChild(Entities.buildRamp(rp)) }
         for rl in World.rails { worldRoot.addChild(Entities.buildRail(rl)) }
 
+        // name tags so you learn what each trick object is
+        for bo in World.boosters { worldRoot.addChild(Art.tag("BOOST", bo.x, bo.y - 40)) }
+        for fb in World.funboxes { worldRoot.addChild(Art.tag("FUNBOX", fb.x + fb.w / 2, fb.y - 14)) }
+        for pm in World.pyramids { worldRoot.addChild(Art.tag("PYRAMID", pm.x + pm.w / 2, pm.y - 14)) }
+        for hp in World.halfpipes { worldRoot.addChild(Art.tag("HALF PIPE", hp.x + hp.w / 2, hp.y - 16)) }
+        for rp in World.ramps { worldRoot.addChild(Art.tag(rp.kind == .quarter ? "QUARTER PIPE" : "KICKER", rp.x, rp.y - rp.h / 2 - 18)) }
+        for rl in World.rails where !rl.name.isEmpty { worldRoot.addChild(Art.tag(rl.name, rl.x + rl.w / 2, rl.y - 14)) }
+
         let up = 1 / tilt   // counter-scale to keep upright things full-height
 
         // scooter pickup in the Bowl
@@ -171,6 +180,17 @@ final class GameScene: SKScene {
             let l = Letter(s.ch, s.x, s.y); let n = Entities.buildLetter(s.ch)
             n.position = CGPoint(x: s.x, y: s.y); n.zPosition = s.y; n.yScale = up
             worldRoot.addChild(n); l.node = n; letters.append(l)
+        }
+
+        // roaming dogs & cats
+        for _ in 0..<7 {
+            let side = Bool.random()
+            let x = side ? 120 + CGFloat.random(in: 0...1080) : 2300 + CGFloat.random(in: 0...1180)
+            let dog = Bool.random()
+            let a = Animal(x: x, y: 150 + CGFloat.random(in: 0...(World.height - 300)), dog: dog,
+                           hue: dog ? 20 + CGFloat.random(in: 0...30) : CGFloat.random(in: 0...360))
+            let n = Entities.buildAnimal(a); n.yScale = up; worldRoot.addChild(n); a.node = n
+            animals.append(a)
         }
 
         worldRoot.addChild(playerShadow)
@@ -330,7 +350,7 @@ final class GameScene: SKScene {
             pickupNode?.removeFromParent(); pickupNode = nil
         }
 
-        updatePeds(t); updateCars(t); updateGuard(t)
+        updatePeds(t); updateCars(t); updateGuard(t); updateAnimals(t)
         if guard_ != nil {
             for tn in World.tunnels where px > tn.x && px < tn.x + tn.w && py > tn.y && py < tn.y + tn.h {
                 loseCopsInTunnel(); break
@@ -538,13 +558,41 @@ final class GameScene: SKScene {
         }
     }
 
+    // MARK: animals (wander, and scurry away from the skater)
+
+    private func updateAnimals(_ t: CGFloat) {
+        for a in animals {
+            let ddx = px - a.x, ddy = py - a.y, dd = hypot2(ddx, ddy)
+            if dd < 130 {
+                let d = max(dd, 1)
+                a.vx = -ddx / d * 165; a.vy = -ddy / d * 165     // bolt away
+            } else {
+                a.timer -= t
+                if a.timer <= 0 {
+                    a.tx = 80 + CGFloat.random(in: 0...(World.width - 160))
+                    a.ty = 80 + CGFloat.random(in: 0...(World.height - 160))
+                    a.timer = 2 + CGFloat.random(in: 0...4)
+                }
+                let dx = a.tx - a.x, dy = a.ty - a.y, d = max(hypot2(dx, dy), 1)
+                a.vx = dx / d * 48; a.vy = dy / d * 48
+            }
+            a.x = clampf(a.x + a.vx * t, 20, World.width - 20)
+            a.y = clampf(a.y + a.vy * t, 20, World.height - 20)
+        }
+    }
+
     // MARK: cars
 
     private func updateCars(_ t: CGFloat) {
         for ca in cars {
-            ca.y += ca.dir * ca.spd * t
-            if ca.y > World.height + 40 { ca.y = -40 }
-            if ca.y < -40 { ca.y = World.height + 40 }
+            // yield: stop if a pedestrian is on the crosswalk in this lane
+            let blocked = peds.contains { !$0.downed && abs($0.x - ca.x) < 42
+                && abs($0.y - World.crossY) < World.crossHalf }
+            if !blocked {
+                ca.y += ca.dir * ca.spd * t
+                if ca.y > World.height + 40 { ca.y = -40 }
+                if ca.y < -40 { ca.y = World.height + 40 }
+            }
             let dx = px - ca.x, dy = py - ca.y
             let over = abs(dx) < 34 && abs(dy) < 52
             if over && z < 30 {                            // grounded -> you get clipped
@@ -566,12 +614,15 @@ final class GameScene: SKScene {
                 }
             } else { ca.hit = false; ca.hopped = false }
 
-            // cars flatten pedestrians who wander into the road (ambient slapstick)
-            for pd in peds where !pd.downed {
-                if abs(pd.x - ca.x) < 26 && abs(pd.y - ca.y) < 42 {
-                    knockDownPed(pd, dirX: CGFloat.random(in: -0.3...0.3), dirY: ca.dir,
-                                 power: 1.7, flatten: true, downFor: 2.8)
-                    pop("SPLAT!", Palette.gold, pd.x, pd.y - 30)
+            // moving cars flatten jaywalkers — but people safely on the crossing are spared
+            if !blocked {
+                for pd in peds where !pd.downed {
+                    if abs(pd.y - World.crossY) < World.crossHalf { continue }
+                    if abs(pd.x - ca.x) < 26 && abs(pd.y - ca.y) < 42 {
+                        knockDownPed(pd, dirX: CGFloat.random(in: -0.3...0.3), dirY: ca.dir,
+                                     power: 1.7, flatten: true, downFor: 2.8)
+                        pop("SPLAT!", Palette.gold, pd.x, pd.y - 30)
+                    }
                 }
             }
         }
@@ -724,6 +775,11 @@ final class GameScene: SKScene {
         for ca in cars {
             ca.node?.position = CGPoint(x: ca.x, y: ca.y)
             ca.node?.zPosition = ca.y
+        }
+        for a in animals {
+            a.node?.position = CGPoint(x: a.x, y: a.y)
+            a.node?.zPosition = a.y
+            if abs(a.vx) > 2 { a.node?.xScale = a.vx < 0 ? -1 : 1 }
         }
         if let g = guard_ {
             guardNode.position = CGPoint(x: g.x, y: g.y); guardNode.zPosition = g.y

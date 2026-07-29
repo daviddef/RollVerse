@@ -59,6 +59,14 @@ enum Art {
         l.yScale = -1                       // counter-flip inside the y-flipped worldRoot
         return l
     }
+
+    /// A small name tag placed above a trick object (so you learn what each one is).
+    static func tag(_ text: String, _ x: CGFloat, _ y: CGFloat) -> SKLabelNode {
+        let l = label(text, size: 15, color: SKColor(hex: 0xdcd6f0, alpha: 0.72), font: "AvenirNext-Bold")
+        l.position = CGPoint(x: x, y: y)
+        l.zPosition = 40
+        return l
+    }
 }
 
 // MARK: - Static world geometry
@@ -84,11 +92,12 @@ enum Entities {
         dash.strokeColor = SKColor(hex: 0xffd35e, alpha: 0.53); dash.lineWidth = 4
         root.addChild(dash)
 
-        // Crosswalk stripes
-        let cwCount = 8, cwSpan = (World.Road.x1 - World.Road.x0 - 36) / 8
+        // Crosswalk — lots of zebra stripes across the road
+        let cwCount = 15, cwSpan = (World.Road.x1 - World.Road.x0 - 24) / CGFloat(cwCount)
         for cw in 0..<cwCount {
-            root.addChild(Art.fillRect(World.Road.x0 + 18 + CGFloat(cw) * cwSpan, 820, 24, 60,
-                                       SKColor(hex: 0xe8e4f0, alpha: 0.67)))
+            root.addChild(Art.fillRect(World.Road.x0 + 14 + CGFloat(cw) * cwSpan,
+                                       World.crossY - 62, cwSpan * 0.55, 124,
+                                       SKColor(hex: 0xe8e4f0, alpha: 0.72)))
         }
 
         // Tile grid in the districts
@@ -207,50 +216,87 @@ enum Entities {
         return root
     }
 
-    /// A half pipe — a channel with a bright coping lip at each end.
+    /// A real half pipe (top-down): a flat trough in the middle with a curved
+    /// transition bank rising to a coping lip at each end (top & bottom in world-y).
     static func buildHalfPipe(_ hp: World.HalfPipe) -> SKNode {
         let root = SKNode()
         root.position = CGPoint(x: hp.x + hp.w / 2, y: hp.y + hp.h / 2)
         root.zPosition = -470
         let w = hp.w, h = hp.h
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + 6, w, h, 20, SKColor(white: 0, alpha: 0.2)))      // shadow
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 20, SKColor(hex: 0x2c2740)))                  // frame
-        root.addChild(Art.fillRoundRect(-w / 2 + 8, -h / 2 + 26, w - 16, h - 52, 14, SKColor(hex: 0x3c355a)))// trough
-        // curved wall shading toward each lip
-        root.addChild(Art.fillRoundRect(-w / 2 + 8, -h / 2 + 8, w - 16, 16, 8, SKColor(hex: 0x655d8c)))
-        root.addChild(Art.fillRoundRect(-w / 2 + 8, h / 2 - 24, w - 16, 16, 8, SKColor(hex: 0x655d8c)))
-        // coping lips
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, 7, 3, Palette.gold))
-        root.addChild(Art.fillRoundRect(-w / 2, h / 2 - 7, w, 7, 3, Palette.gold))
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + 8, w, h, 22, SKColor(white: 0, alpha: 0.22)))   // shadow
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 22, SKColor(hex: 0x322c46)))               // structure
+        // flat bottom of the pipe
+        root.addChild(Art.fillRoundRect(-w / 2 + 10, -h * 0.16, w - 20, h * 0.32, 10, SKColor(hex: 0x5a5378)))
+        // transition banks: bands from the flat (dark) up to each lip (light)
+        let bank: [UInt32] = [0x4d4670, 0x655d8c, 0x8079a6, 0x9a93be]
+        let bandH = (h * 0.34) / CGFloat(bank.count)
+        for (i, c) in bank.enumerated() {
+            let inset = 10 - CGFloat(i) * 1.5
+            let yTop = -h / 2 + 8 + CGFloat(bank.count - 1 - i) * bandH
+            let yBot = h / 2 - 8 - bandH - CGFloat(bank.count - 1 - i) * bandH
+            root.addChild(Art.fillRoundRect(-w / 2 + inset, yTop, w - inset * 2, bandH + 1, 5, SKColor(hex: c)))
+            root.addChild(Art.fillRoundRect(-w / 2 + inset, yBot, w - inset * 2, bandH + 1, 5, SKColor(hex: c)))
+        }
+        // coping lips + side walls
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, 8, 4, Palette.gold))
+        root.addChild(Art.fillRoundRect(-w / 2, h / 2 - 8, w, 8, 4, Palette.gold))
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, 7, h, 3, SKColor(hex: 0x241f36)))
+        root.addChild(Art.fillRoundRect(w / 2 - 7, -h / 2, 7, h, 3, SKColor(hex: 0x241f36)))
         return root
     }
 
-    /// Tunnel floor + entrance frame (drawn on the ground). The roof is a separate node.
+    /// A wandering dog or cat that scurries away from the skater.
+    static func buildAnimal(_ a: Animal) -> SKNode {
+        let root = SKNode()
+        let s: CGFloat = a.dog ? 1.0 : 0.82
+        let body = SKColor.hsl(a.hue, a.dog ? 0.35 : 0.10, a.dog ? 0.45 : 0.62)
+        root.addChild({ let sh = SKShapeNode(ellipseOf: CGSize(width: 26 * s, height: 10 * s))
+            sh.fillColor = SKColor(white: 0, alpha: 0.28); sh.strokeColor = .clear; return sh }())
+        // legs
+        root.addChild(Art.line(-7 * s, -2, -7 * s, -9 * s, 3, Palette.wall))
+        root.addChild(Art.line(7 * s, -2, 7 * s, -9 * s, 3, Palette.wall))
+        // body + tail + head
+        root.addChild(Art.fillRoundRect(-11 * s, -20 * s, 22 * s, 13 * s, 6 * s, body))
+        root.addChild(Art.line(-11 * s, -16 * s, -18 * s, -22 * s, 3, body))          // tail
+        root.addChild(Art.circle(11 * s, -22 * s, 6 * s, body))                        // head
+        if a.dog {
+            root.addChild(Art.line(9 * s, -27 * s, 6 * s, -20 * s, 3, body))           // floppy ear
+        } else {
+            root.addChild(Art.line(8 * s, -27 * s, 6 * s, -32 * s, 2.5, body))         // pointy ears
+            root.addChild(Art.line(14 * s, -27 * s, 16 * s, -32 * s, 2.5, body))
+        }
+        return root
+    }
+
+    /// Tunnel floor + glowing entrance frame (drawn on the ground). Roof is separate.
     static func buildTunnelFloor(_ tn: World.Tunnel) -> SKNode {
         let root = SKNode()
         root.position = CGPoint(x: tn.x + tn.w / 2, y: tn.y + tn.h / 2)
         root.zPosition = -3
         let w = tn.w, h = tn.h
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 18, SKColor(hex: 0x1a1626)))
-        let tag = Art.label("TUNNEL", size: 16, color: Palette.cyan); tag.alpha = 0.7
-        tag.position = CGPoint(x: 0, y: -h / 2 - 16)
-        root.addChild(tag)
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 22, SKColor(hex: 0x140f22)))
+        let frame = SKShapeNode(path: Art.roundRectPath(-w / 2, -h / 2, w, h, 22))
+        frame.strokeColor = SKColor(hex: 0x37d6e6, alpha: 0.8); frame.lineWidth = 5; frame.fillColor = .clear
+        root.addChild(frame)
         return root
     }
 
-    /// The tunnel roof: high zPosition so the skater passes UNDER it (hidden inside).
+    /// The tunnel roof: high zPosition so the skater passes UNDER it. Translucent so
+    /// you can see yourself duck inside (and the cops lose you).
     static func buildTunnelRoof(_ tn: World.Tunnel) -> SKNode {
         let root = SKNode()
         root.position = CGPoint(x: tn.x + tn.w / 2, y: tn.y + tn.h / 2)
         root.zPosition = 8000
         let w = tn.w, h = tn.h
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 18, SKColor(hex: 0x120f1e, alpha: 0.94)))
-        // roof ribs
-        var x = -w / 2 + 40
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 22, SKColor(hex: 0x120f1e, alpha: 0.6)))
+        var x = -w / 2 + 34
         while x < w / 2 - 20 {
-            root.addChild(Art.fillRect(x, -h / 2 + 10, 4, h - 20, SKColor(white: 1, alpha: 0.05)))
-            x += 46
+            root.addChild(Art.fillRect(x, -h / 2 + 10, 5, h - 20, SKColor(white: 1, alpha: 0.06)))
+            x += 44
         }
+        let tag = Art.label("TUNNEL", size: 22, color: Palette.cyan)
+        tag.position = CGPoint(x: 0, y: -h / 2 + 24)
+        root.addChild(tag)
         return root
     }
 
