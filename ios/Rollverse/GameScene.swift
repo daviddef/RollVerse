@@ -225,7 +225,7 @@ final class GameScene: SKScene {
         // movement (topSpeed / turn / roll come from the geared setup)
         if boostTimer > 0 { boostTimer -= t }
         let inp = moveInput()
-        let target = boostTimer > 0 ? 900 : eff.topSpeed     // boost raises the cap so it holds
+        let target = boostTimer > 0 ? 540 : eff.topSpeed     // boost raises the cap so it holds
         let a = onGround ? eff.accel : eff.accel * 0.5
         if inp.mag > 0.1 {
             let tvx = inp.x * target * inp.mag, tvy = inp.y * target * inp.mag
@@ -269,9 +269,9 @@ final class GameScene: SKScene {
         if boostCd > 0 { boostCd -= dt }
         if onGround && !grinding && boostCd <= 0 {
             for bo in World.boosters where abs(px - bo.x) < bo.len / 2 + 12 && abs(py - bo.y) < 46 {
-                let boost: CGFloat = 1050
+                let boost: CGFloat = 600
                 vx = cos(bo.dir) * boost; vy = sin(bo.dir) * boost
-                face = bo.dir; boostCd = 0.6; boostTimer = 1.2   // launch fast + hold the speed
+                face = bo.dir; boostCd = 0.6; boostTimer = 1.0   // launch fast + hold the speed
                 pop("BOOST!", Palette.volt, px, py - 40)
                 break
             }
@@ -281,14 +281,14 @@ final class GameScene: SKScene {
         if onGround && !grinding {
             let sp = hypot2(vx, vy)
             for rp in World.ramps where abs(px - rp.x) < rp.w / 2 + 24 && abs(py - rp.y) < rp.h / 2 + 24 && sp > 150 {
-                vz = eff.jump * (rp.kind == .quarter ? 2.1 : 1.7); onGround = false
+                vz = eff.jump * (rp.kind == .quarter ? 1.8 : 1.5); onGround = false
                 pop(rp.kind == .quarter ? "QUARTER PIPE!" : "RAMP!", Palette.cyan, px, py - 40)
                 break
             }
             // ride up a pyramid slope to pop off the top
             for pm in World.pyramids
                 where px > pm.x && px < pm.x + pm.w && py > pm.y && py < pm.y + pm.h && sp > 160 {
-                vz = eff.jump * 1.6; onGround = false
+                vz = eff.jump * 1.4; onGround = false
                 pop("PYRAMID!", Palette.cyan, px, pm.y - 20)
                 break
             }
@@ -712,7 +712,7 @@ final class GameScene: SKScene {
                                        airborne: !onGround, moving: movingNow)
         playerRig.position = CGPoint(x: px, y: py - z)
         playerRig.zPosition = py
-        playerRig.setScale(1 + z * 0.0018)          // pop toward the camera on air (fake-3D lift)
+        playerRig.setScale(1 + z * 0.0011)          // pop toward the camera on air (fake-3D lift)
         playerRig.isHidden = bailing
         worldRoot.addChild(playerRig)
 

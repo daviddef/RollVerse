@@ -144,7 +144,9 @@ final class HUD: SKNode {
         heatBarFill.fillColor = heatFrac > 0.6 ? Palette.coral : Palette.gold
     }
 
-    func showSwitchHint(_ show: Bool) { switchHint.isHidden = !show; layout(size) }
+    // The RIDE control button already signals switching, so keep this hint hidden
+    // (it was overlapping the GEAR button).
+    func showSwitchHint(_ show: Bool) { switchHint.isHidden = true }
 
     func showBanner(_ text: String) {
         bannerLabel.text = text
