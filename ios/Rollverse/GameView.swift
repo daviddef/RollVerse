@@ -19,6 +19,7 @@ struct GameView: View {
             .persistentSystemOverlays(.hidden)
             .onAppear { scene.garage = store }
             .sheet(isPresented: $store.showGarage) { GarageView(store: store) }
+            .sheet(isPresented: $store.showTricks) { TrickGuideView(store: store) }
     }
 }
 

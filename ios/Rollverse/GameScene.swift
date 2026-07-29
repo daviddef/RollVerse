@@ -76,6 +76,7 @@ final class GameScene: SKScene {
 
     private var boostCd: CGFloat = 0    // cooldown so a pad fires once per crossing
     private var boostTimer: CGFloat = 0 // while >0 the speed cap is raised (the boost holds)
+    private var bigAir = false          // launched off a ramp -> unlocks the Backflip
 
     // MARK: input buffers (edge-triggered, like jumpBuf/trickBuf/switchBuf)
     private var jumpBuf = false, trickBuf = false, switchBuf = false
@@ -203,6 +204,7 @@ final class GameScene: SKScene {
         controls.onTrick = { [weak self] in self?.trickBuf = true }
         controls.onSwitch = { [weak self] in self?.switchBuf = true }
         controls.onGarage = { [weak self] in self?.garage?.showGarage = true }
+        controls.onTricks = { [weak self] in self?.garage?.showTricks = true }
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -286,14 +288,14 @@ final class GameScene: SKScene {
         py = clampf(py, 24, World.height - 24)
 
         // jump
-        if jumpBuf && onGround { vz = eff.jump; onGround = false; if grinding { endGrind() } }
+        if jumpBuf && onGround { vz = eff.jump; onGround = false; bigAir = false; if grinding { endGrind() } }
         jumpBuf = false
 
         // gravity / height
         if !onGround {
             vz -= r.gravity * t; z += vz * t; spin += spinRate * t
             if z <= 0 {
-                z = 0; onGround = true; vz = 0; spin = 0; flip = false; spinRate = 0
+                z = 0; onGround = true; vz = 0; spin = 0; flip = false; spinRate = 0; bigAir = false
                 landCombo(); tryStartGrind()
             }
         }
@@ -317,21 +319,21 @@ final class GameScene: SKScene {
         if onGround && !grinding {
             let sp = hypot2(vx, vy)
             for rp in World.ramps where abs(px - rp.x) < rp.w / 2 + 24 && abs(py - rp.y) < rp.h / 2 + 24 && sp > 150 {
-                vz = eff.jump * (rp.kind == .quarter ? 1.8 : 1.5); onGround = false
+                vz = eff.jump * (rp.kind == .quarter ? 1.8 : 1.5); onGround = false; bigAir = true
                 pop(rp.kind == .quarter ? "QUARTER PIPE!" : "RAMP!", Palette.cyan, px, py - 40)
                 break
             }
             // ride up a pyramid slope to pop off the top
             for pm in World.pyramids
                 where px > pm.x && px < pm.x + pm.w && py > pm.y && py < pm.y + pm.h && sp > 160 {
-                vz = eff.jump * 1.4; onGround = false
+                vz = eff.jump * 1.4; onGround = false; bigAir = true
                 pop("PYRAMID!", Palette.cyan, px, pm.y - 20)
                 break
             }
             // hit either wall of a half pipe -> big air out of the pipe
             for hp in World.halfpipes where px > hp.x && px < hp.x + hp.w && sp > 150 {
                 if (abs(py - hp.y) < 44 && vy < 0) || (abs(py - (hp.y + hp.h)) < 44 && vy > 0) {
-                    vz = eff.jump * 1.9; onGround = false
+                    vz = eff.jump * 1.9; onGround = false; bigAir = true
                     pop("HALF PIPE!", Palette.cyan, px, py - 40)
                     break
                 }
@@ -386,19 +388,14 @@ final class GameScene: SKScene {
 
     private func doTrick() {
         let r = ride()
-        let name = r.tricks[trickCount % r.tricks.count]
+        let def = Trick.pick(feet: r.anchor == .feet, dir: Trick.dir(controls.stickVec), bigAir: bigAir)
         trickCount += 1; combo += 1
-        if r.anchor == .feet {
-            spinRate = (Bool.random() ? 1 : -1) * CGFloat.random(in: 7...12)
-            flip.toggle()
-        } else {
-            spinRate = (Bool.random() ? 1 : -1) * CGFloat.random(in: 9...13)
-            flip = false
-        }
+        spinRate = (Bool.random() ? 1 : -1) * def.spinRate
+        flip = def.flip && r.anchor == .feet
         let mult = zoneMult(px, py)
-        comboScore += (r.trickBase * mult).rounded()
-        let label = mult > 1 ? "\(name)!  ×\(Int(mult))" : "\(name)!"
-        let color = mult > 1 ? Palette.volt : (r.anchor == .feet ? Palette.coral : Palette.cyan)
+        comboScore += (def.score * mult).rounded()
+        let label = mult > 1 ? "\(def.name)!  ×\(Int(mult))" : "\(def.name)!"
+        let color = def.name == "Backflip" ? Palette.gold : (r.anchor == .feet ? Palette.coral : Palette.cyan)
         pop(label, color, px, py - z / tilt - 46)
         coolHeat(4)
         hud.setCombo(combo)
@@ -440,7 +437,8 @@ final class GameScene: SKScene {
         grinding = true
         grindZone = GrindZone(x0: rl.x, x1: rl.x + rl.w, cy: rl.y + rl.h / 2)
         combo += 1
-        pop("GRIND!", Palette.gold, px, rl.y - 16)
+        pop("\(Trick.grinds[trickCount % Trick.grinds.count])!", Palette.gold, px, rl.y - 16)
+        trickCount += 1
         hud.setCombo(combo)
     }
     private func endGrind() {
