@@ -123,6 +123,11 @@ final class GameScene: SKScene {
         for bo in World.boosters { worldRoot.addChild(Entities.buildBooster(bo)) }
         for fb in World.funboxes { worldRoot.addChild(Entities.buildFunbox(fb)) }
         for py in World.pyramids { worldRoot.addChild(Entities.buildPyramid(py)) }
+        for hp in World.halfpipes { worldRoot.addChild(Entities.buildHalfPipe(hp)) }
+        for tn in World.tunnels {
+            worldRoot.addChild(Entities.buildTunnelFloor(tn))
+            worldRoot.addChild(Entities.buildTunnelRoof(tn))
+        }
         for rp in World.ramps { worldRoot.addChild(Entities.buildRamp(rp)) }
         for rl in World.rails { worldRoot.addChild(Entities.buildRail(rl)) }
 
@@ -303,6 +308,14 @@ final class GameScene: SKScene {
                 pop("PYRAMID!", Palette.cyan, px, pm.y - 20)
                 break
             }
+            // hit either wall of a half pipe -> big air out of the pipe
+            for hp in World.halfpipes where px > hp.x && px < hp.x + hp.w && sp > 150 {
+                if (abs(py - hp.y) < 44 && vy < 0) || (abs(py - (hp.y + hp.h)) < 44 && vy > 0) {
+                    vz = eff.jump * 1.9; onGround = false
+                    pop("HALF PIPE!", Palette.cyan, px, py - 40)
+                    break
+                }
+            }
         }
 
         // trick
@@ -318,6 +331,11 @@ final class GameScene: SKScene {
         }
 
         updatePeds(t); updateCars(t); updateGuard(t)
+        if guard_ != nil {
+            for tn in World.tunnels where px > tn.x && px < tn.x + tn.w && py > tn.y && py < tn.y + tn.h {
+                loseCopsInTunnel(); break
+            }
+        }
         updateCollectibles()
         if heat > 0 { coolHeatSilent(6 * dt) }
         announceDistrict()
@@ -434,6 +452,16 @@ final class GameScene: SKScene {
         addScore(150)
         coinCount += 15; garage?.coins = coinCount; hud.setCoins(coinCount)
         pop("YOU LOST THE COPS!  +150  +15🪙", Palette.volt, px, py - 70)
+        celebrate(px, py)
+    }
+
+    private func loseCopsInTunnel() {
+        guard guard_ != nil else { return }
+        removeGuard()
+        heat = max(0, heat - 60); hud.setHeat(heat, max: HEAT_MAX)   // duck out of sight
+        addScore(150)
+        coinCount += 15; garage?.coins = coinCount; hud.setCoins(coinCount)
+        pop("LOST THEM IN THE TUNNEL!  +150", Palette.volt, px, py - 70)
         celebrate(px, py)
     }
 

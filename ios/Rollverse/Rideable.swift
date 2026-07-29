@@ -35,7 +35,7 @@ struct Rideable {
 
     static let skateboard = Rideable(
         key: "skateboard", label: "Skateboard", anchor: .feet,
-        topSpeed: 340, accel: 9, jumpPower: 280, gravity: 780,
+        topSpeed: 340, accel: 9, jumpPower: 300, gravity: 720,
         deck: Palette.coral, wheels: SKColor(hex: 0xffd35e),
         tricks: ["Kickflip", "Heelflip", "Shove-it", "360 Flip", "Varial Flip"],
         trickBase: 42
@@ -43,7 +43,7 @@ struct Rideable {
 
     static let scooter = Rideable(
         key: "scooter", label: "Pro Scooter", anchor: .bars,
-        topSpeed: 300, accel: 11, jumpPower: 300, gravity: 800,
+        topSpeed: 300, accel: 11, jumpPower: 315, gravity: 740,
         deck: Palette.cyan, wheels: SKColor(hex: 0xeaf6ff),
         tricks: ["Bar Spin", "Tailwhip", "X-Up", "Bri Flip", "360 Whip"],
         trickBase: 46

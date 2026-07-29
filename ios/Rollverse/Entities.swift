@@ -207,6 +207,53 @@ enum Entities {
         return root
     }
 
+    /// A half pipe — a channel with a bright coping lip at each end.
+    static func buildHalfPipe(_ hp: World.HalfPipe) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: hp.x + hp.w / 2, y: hp.y + hp.h / 2)
+        root.zPosition = -470
+        let w = hp.w, h = hp.h
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + 6, w, h, 20, SKColor(white: 0, alpha: 0.2)))      // shadow
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 20, SKColor(hex: 0x2c2740)))                  // frame
+        root.addChild(Art.fillRoundRect(-w / 2 + 8, -h / 2 + 26, w - 16, h - 52, 14, SKColor(hex: 0x3c355a)))// trough
+        // curved wall shading toward each lip
+        root.addChild(Art.fillRoundRect(-w / 2 + 8, -h / 2 + 8, w - 16, 16, 8, SKColor(hex: 0x655d8c)))
+        root.addChild(Art.fillRoundRect(-w / 2 + 8, h / 2 - 24, w - 16, 16, 8, SKColor(hex: 0x655d8c)))
+        // coping lips
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, 7, 3, Palette.gold))
+        root.addChild(Art.fillRoundRect(-w / 2, h / 2 - 7, w, 7, 3, Palette.gold))
+        return root
+    }
+
+    /// Tunnel floor + entrance frame (drawn on the ground). The roof is a separate node.
+    static func buildTunnelFloor(_ tn: World.Tunnel) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: tn.x + tn.w / 2, y: tn.y + tn.h / 2)
+        root.zPosition = -3
+        let w = tn.w, h = tn.h
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 18, SKColor(hex: 0x1a1626)))
+        let tag = Art.label("TUNNEL", size: 16, color: Palette.cyan); tag.alpha = 0.7
+        tag.position = CGPoint(x: 0, y: -h / 2 - 16)
+        root.addChild(tag)
+        return root
+    }
+
+    /// The tunnel roof: high zPosition so the skater passes UNDER it (hidden inside).
+    static func buildTunnelRoof(_ tn: World.Tunnel) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: tn.x + tn.w / 2, y: tn.y + tn.h / 2)
+        root.zPosition = 8000
+        let w = tn.w, h = tn.h
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 18, SKColor(hex: 0x120f1e, alpha: 0.94)))
+        // roof ribs
+        var x = -w / 2 + 40
+        while x < w / 2 - 20 {
+            root.addChild(Art.fillRect(x, -h / 2 + 10, 4, h - 20, SKColor(white: 1, alpha: 0.05)))
+            x += 46
+        }
+        return root
+    }
+
     /// A raised funbox (its top edge is a grindable ledge added in World.rails).
     static func buildFunbox(_ f: World.Funbox) -> SKNode {
         let root = SKNode()

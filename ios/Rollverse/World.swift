@@ -63,6 +63,21 @@ enum World {
     struct Pyramid { let x, y, w, h: CGFloat }
     static let pyramids: [Pyramid] = [ Pyramid(x: 2900, y: 300, w: 360, h: 240) ]
 
+    // HALF PIPES — a channel with a wall at each end (top/bottom in world-y). Hit a
+    // wall with speed to launch big air out of the pipe.
+    struct HalfPipe { let x, y, w, h: CGFloat }
+    static let halfpipes: [HalfPipe] = [
+        HalfPipe(x: 900,  y: 340,  w: 420, h: 220),   // upper plaza
+        HalfPipe(x: 2300, y: 1120, w: 480, h: 240),   // lower bowl
+    ]
+
+    // TUNNELS — skate through one while the cops chase you and you lose them.
+    struct Tunnel { let x, y, w, h: CGFloat }
+    static let tunnels: [Tunnel] = [
+        Tunnel(x: 1440, y: 250, w: 500, h: 210),      // over the road
+        Tunnel(x: 3000, y: 1120, w: 420, h: 210),     // bowl underpass
+    ]
+
     // COLLECTIBLES — coins (currency) scattered as trails, and the 5 S-K-A-T-E letters.
     static let coinSpots: [CGPoint] = [
         CGPoint(x: 220, y: 900), CGPoint(x: 320, y: 820), CGPoint(x: 420, y: 760),
