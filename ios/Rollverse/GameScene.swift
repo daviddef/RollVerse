@@ -432,7 +432,8 @@ final class GameScene: SKScene {
         guard guard_ != nil else { return }
         removeGuard()
         addScore(150)
-        pop("YOU LOST THE COPS!  +150", Palette.volt, px, py - 70)
+        coinCount += 15; garage?.coins = coinCount; hud.setCoins(coinCount)
+        pop("YOU LOST THE COPS!  +150  +15🪙", Palette.volt, px, py - 70)
         celebrate(px, py)
     }
 
@@ -576,7 +577,8 @@ final class GameScene: SKScene {
                 l.taken = true
                 l.node?.run(.sequence([.group([.scale(to: 1.8, duration: 0.25), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
                 addScore(50)
-                pop("\(l.ch)!", Palette.coral, l.x, l.y - 34)
+                coinCount += 3; garage?.coins = coinCount; hud.setCoins(coinCount)
+                pop("\(l.ch)!  +3", Palette.coral, l.x, l.y - 34)
                 hud.setSkate(letters.map { $0.taken })
                 if letters.allSatisfy({ $0.taken }) { skateComplete() }
             }
@@ -724,7 +726,11 @@ final class GameScene: SKScene {
         playerHolder.isHidden = bailing
         playerRig.removeFromParent()
         let movingNow = onGround && hypot2(vx, vy) > 28
-        playerRig = Entities.playerRig(ride: ride(), face: face, spin: spin, flip: flip,
+        var riggedRide = ride()
+        if riggedRide.anchor == .feet {     // board skins recolour the deck
+            riggedRide = riggedRide.withDeck(SKColor(hex: Skins.skin(garage?.equippedSkin ?? "classic").hex))
+        }
+        playerRig = Entities.playerRig(ride: riggedRide, face: face, spin: spin, flip: flip,
                                        airborne: !onGround, moving: movingNow)
         playerRig.setScale(1 + z * 0.0011)          // pop toward the camera on air (fake-3D lift)
         playerHolder.addChild(playerRig)

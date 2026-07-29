@@ -10,7 +10,16 @@ final class GarageStore: ObservableObject {
     @Published var skateSetup = Setup()
     @Published var scooterSetup = Setup()
     @Published var currentRide = "skateboard"     // the scene keeps this in sync
-    @Published var coins = 0                       // wallet (future shop currency)
+    @Published var coins = 0                       // wallet
+    @Published var ownedSkins: Set<String> = ["classic"]
+    @Published var equippedSkin = "classic"
+
+    func owns(_ id: String) -> Bool { ownedSkins.contains(id) }
+    func canAfford(_ s: Skin) -> Bool { coins >= s.price }
+    func buyOrEquip(_ s: Skin) {
+        if owns(s.id) { equippedSkin = s.id }
+        else if coins >= s.price { coins -= s.price; ownedSkins.insert(s.id); equippedSkin = s.id }
+    }
 
     enum Dial { case deck, wheels, trucks, bearings }
 
@@ -54,13 +63,19 @@ struct GarageView: View {
         ZStack {
             Color(hex: 0x0b0913).ignoresSafeArea()
             VStack(spacing: 12) {
-                HStack(alignment: .center) {
+                HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("GARAGE").font(.system(size: 24, weight: .black)).foregroundColor(.white)
-                        Text("Tuning your \(base.label) — feel it next run")
+                        Text("Tuning your \(base.label)")
                             .font(.system(size: 12)).foregroundColor(Color(hex: 0xa79fc4))
                     }
                     Spacer()
+                    HStack(spacing: 5) {
+                        Text("🪙").font(.system(size: 15))
+                        Text("\(store.coins)").font(.system(size: 18, weight: .black)).foregroundColor(Color(hex: 0xffce4a))
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(Capsule().fill(Color(hex: 0x181426)))
                     Button { store.showGarage = false } label: {
                         Text("Ride out ▶").font(.system(size: 16, weight: .bold)).foregroundColor(Color(hex: 0x1a0a06))
                             .padding(.horizontal, 20).padding(.vertical, 11)
@@ -68,27 +83,68 @@ struct GarageView: View {
                     }
                 }
 
-                LazyVGrid(columns: cols, spacing: 12) {
-                    dial("Deck",     Gear.deck[store.current.deck],      .deck)
-                    dial("Wheels",   Gear.wheels[store.current.wheels],  .wheels)
-                    dial(isScooter ? "Clamp" : "Trucks", Gear.trucks[store.current.trucks], .trucks)
-                    dial("Bearings", Gear.bearings[store.current.bearings], .bearings)
-                }
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        LazyVGrid(columns: cols, spacing: 12) {
+                            dial("Deck",     Gear.deck[store.current.deck],      .deck)
+                            dial("Wheels",   Gear.wheels[store.current.wheels],  .wheels)
+                            dial(isScooter ? "Clamp" : "Trucks", Gear.trucks[store.current.trucks], .trucks)
+                            dial("Bearings", Gear.bearings[store.current.bearings], .bearings)
+                        }
 
-                HStack(spacing: 18) {
-                    Text("FEEL").font(.system(size: 12, weight: .heavy)).foregroundColor(Color(hex: 0xa79fc4)).kerning(2)
-                    stat("Speed", eff.speedBar, 0x37d6e6)
-                    stat("Turn",  eff.turnBar,  0xc6ff42)
-                    stat("Pop",   eff.popBar,   0xffce4a)
-                    stat("Roll",  eff.rollBar,  0xa583ff)
+                        HStack(spacing: 18) {
+                            Text("FEEL").font(.system(size: 12, weight: .heavy)).foregroundColor(Color(hex: 0xa79fc4)).kerning(2)
+                            stat("Speed", eff.speedBar, 0x37d6e6)
+                            stat("Turn",  eff.turnBar,  0xc6ff42)
+                            stat("Pop",   eff.popBar,   0xffce4a)
+                            stat("Roll",  eff.rollBar,  0xa583ff)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 12)
+                        .frame(maxWidth: .infinity)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Color(hex: 0x181426)))
+
+                        skinsSection
+                    }
                 }
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color(hex: 0x181426)))
             }
             .padding(18)
         }
         .presentationDetents([.large])
+    }
+
+    private var skinsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("BOARD SKINS — SPEND YOUR COINS").font(.system(size: 12, weight: .heavy))
+                .foregroundColor(Color(hex: 0xa79fc4)).kerning(1.4)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) { ForEach(Skins.all) { swatch($0) } }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color(hex: 0x181426)))
+    }
+
+    private func swatch(_ s: Skin) -> some View {
+        let owned = store.owns(s.id)
+        let equipped = store.equippedSkin == s.id
+        return Button { store.buyOrEquip(s) } label: {
+            VStack(spacing: 4) {
+                RoundedRectangle(cornerRadius: 8).fill(Color(hex: s.hex)).frame(width: 58, height: 34)
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .stroke(equipped ? Color.white : Color.white.opacity(0.15), lineWidth: equipped ? 3 : 1))
+                Text(s.name).font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                Text(equipped ? "EQUIPPED" : (owned ? "Owned" : "🪙\(s.price)"))
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(equipped ? Color(hex: 0xc6ff42)
+                                     : (owned ? Color(hex: 0xa79fc4)
+                                        : (store.canAfford(s) ? Color(hex: 0xffce4a) : Color(hex: 0x6f6790))))
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x221c34)))
+        }
+        .buttonStyle(.plain)
+        .disabled(!owned && !store.canAfford(s))
     }
 
     private func dial(_ title: String, _ opt: Gear.Opt, _ d: GarageStore.Dial) -> some View {

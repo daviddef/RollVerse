@@ -53,4 +53,11 @@ struct Rideable {
         skateboard.key: skateboard,
         scooter.key: scooter
     ]
+
+    /// A copy re-skinned with a new deck colour (used by the shop).
+    func withDeck(_ c: SKColor) -> Rideable {
+        Rideable(key: key, label: label, anchor: anchor,
+                 topSpeed: topSpeed, accel: accel, jumpPower: jumpPower, gravity: gravity,
+                 deck: c, wheels: wheels, tricks: tricks, trickBase: trickBase)
+    }
 }

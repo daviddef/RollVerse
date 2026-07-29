@@ -20,6 +20,23 @@ struct Setup: Equatable {
     var bearings = 1
 }
 
+// Board deck skins you buy with coins (design bible §10 — currency → identity).
+struct Skin: Identifiable {
+    let id: String; let name: String; let price: Int; let hex: UInt32
+}
+
+enum Skins {
+    static let all: [Skin] = [
+        Skin(id: "classic", name: "Classic",   price: 0,  hex: 0xff5c39),
+        Skin(id: "volt",    name: "Volt",      price: 30, hex: 0xc6ff42),
+        Skin(id: "aqua",    name: "Aqua",      price: 30, hex: 0x37d6e6),
+        Skin(id: "gold",    name: "Gold",      price: 60, hex: 0xffce4a),
+        Skin(id: "grape",   name: "Grape",     price: 60, hex: 0xa583ff),
+        Skin(id: "bubble",  name: "Bubblegum", price: 90, hex: 0xff9ec2),
+    ]
+    static func skin(_ id: String) -> Skin { all.first { $0.id == id } ?? all[0] }
+}
+
 enum Gear {
     struct Opt { let name: String; let hint: String
                  let ts: CGFloat; let ac: CGFloat; let pop: CGFloat; let roll: CGFloat }
