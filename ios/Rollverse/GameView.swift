@@ -5,6 +5,7 @@ import SwiftUI
 import SpriteKit
 
 struct GameView: View {
+    @StateObject private var store = GarageStore()
     @State private var scene: GameScene = {
         let s = GameScene(size: CGSize(width: 1024, height: 768))
         s.scaleMode = .resizeFill      // fills the device; camera follows the skater
@@ -16,6 +17,8 @@ struct GameView: View {
             .ignoresSafeArea()
             .statusBarHidden(true)
             .persistentSystemOverlays(.hidden)
+            .onAppear { scene.garage = store }
+            .sheet(isPresented: $store.showGarage) { GarageView(store: store) }
     }
 }
 

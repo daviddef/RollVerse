@@ -17,6 +17,7 @@ final class GameScene: SKScene {
     private let hud = HUD()
     private let controls = Controls()
     private var sky: SKSpriteNode?
+    var garage: GarageStore?           // set by GameView; shared gear state
 
     // MARK: player state (mirrors `player` in the web build)
     private var px: CGFloat = 300, py: CGFloat = 900
@@ -149,6 +150,7 @@ final class GameScene: SKScene {
         controls.onJump = { [weak self] in self?.jumpBuf = true }
         controls.onTrick = { [weak self] in self?.trickBuf = true }
         controls.onSwitch = { [weak self] in self?.switchBuf = true }
+        controls.onGarage = { [weak self] in self?.garage?.showGarage = true }
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -174,6 +176,7 @@ final class GameScene: SKScene {
         if lastTime == 0 { lastTime = currentTime }
         let dt = min(0.05, currentTime - lastTime)
         lastTime = currentTime
+        if garage?.showGarage == true { syncNodes(); return }   // paused in the garage
         if !introOpen { simulate(CGFloat(dt)) }
         syncNodes()
     }
@@ -200,16 +203,23 @@ final class GameScene: SKScene {
 
         if switchBuf { doSwitch(); switchBuf = false }
         let r = ride()
+        let eff = Gear.effective(base: r, setup: garage?.setup(for: rideKey) ?? Setup())
         let t = dt
 
-        // movement
+        // movement (topSpeed / turn / roll come from the geared setup)
         let inp = moveInput()
-        let target = r.topSpeed
-        let a = onGround ? r.accel : r.accel * 0.5
-        let tvx = inp.x * target * inp.mag, tvy = inp.y * target * inp.mag
-        vx += (tvx - vx) * min(1, a * t)
-        vy += (tvy - vy) * min(1, a * t)
-        if inp.mag > 0.1 { face = atan2(vy, vx) }
+        let target = eff.topSpeed
+        let a = onGround ? eff.accel : eff.accel * 0.5
+        if inp.mag > 0.1 {
+            let tvx = inp.x * target * inp.mag, tvy = inp.y * target * inp.mag
+            vx += (tvx - vx) * min(1, a * t)
+            vy += (tvy - vy) * min(1, a * t)
+            face = atan2(vy, vx)
+        } else {
+            // coast — bearings/wheels decide how long you keep rolling
+            let keep = pow(onGround ? eff.coast : 0.85, t)
+            vx *= keep; vy *= keep
+        }
 
         // grinding locks to the rail centreline and drips steady combo score
         if grinding, let gz = grindZone {
@@ -223,7 +233,7 @@ final class GameScene: SKScene {
         py = clampf(py, 24, World.height - 24)
 
         // jump
-        if jumpBuf && onGround { vz = r.jumpPower; onGround = false; if grinding { endGrind() } }
+        if jumpBuf && onGround { vz = eff.jump; onGround = false; if grinding { endGrind() } }
         jumpBuf = false
 
         // gravity / height
@@ -251,14 +261,14 @@ final class GameScene: SKScene {
         if onGround && !grinding {
             let sp = hypot2(vx, vy)
             for rp in World.ramps where abs(px - rp.x) < rp.w / 2 + 24 && abs(py - rp.y) < rp.h / 2 + 24 && sp > 150 {
-                vz = r.jumpPower * (rp.kind == .quarter ? 2.1 : 1.7); onGround = false
+                vz = eff.jump * (rp.kind == .quarter ? 2.1 : 1.7); onGround = false
                 pop(rp.kind == .quarter ? "QUARTER PIPE!" : "RAMP!", Palette.cyan, px, py - 40)
                 break
             }
             // ride up a pyramid slope to pop off the top
             for pm in World.pyramids
                 where px > pm.x && px < pm.x + pm.w && py > pm.y && py < pm.y + pm.h && sp > 160 {
-                vz = r.jumpPower * 1.6; onGround = false
+                vz = eff.jump * 1.6; onGround = false
                 pop("PYRAMID!", Palette.cyan, px, pm.y - 20)
                 break
             }
@@ -297,6 +307,7 @@ final class GameScene: SKScene {
     private func doSwitch() {
         guard unlockedScooter else { return }
         rideKey = rideKey == "skateboard" ? "scooter" : "skateboard"
+        garage?.currentRide = rideKey
         hud.setRide(ride().label)
         pop("Now riding: \(ride().label)", ride().deck, px, py - 60)
     }
