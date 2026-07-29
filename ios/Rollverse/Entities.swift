@@ -256,8 +256,10 @@ enum Entities {
     }
 
     /// The player rig is rebuilt each frame from live state (cheap: one node).
-    /// `face` orients the deck; `spin`/`flip` animate the trick; anchor picks the rig.
-    static func playerRig(ride: Rideable, face: CGFloat, spin: CGFloat, flip: Bool, airborne: Bool) -> SKNode {
+    /// `face` orients the rider; `spin`/`flip` animate the trick; `moving` picks the
+    /// rolling stance vs. the stopped (board-held-vertical) pose.
+    static func playerRig(ride: Rideable, face: CGFloat, spin: CGFloat, flip: Bool,
+                          airborne: Bool, moving: Bool) -> SKNode {
         let spinner = SKNode()
         if airborne && (spin != 0 || flip) {
             spinner.zRotation = spin * 0.12
@@ -268,38 +270,75 @@ enum Entities {
 
         let rig = SKNode()
         if ride.anchor == .feet {
-            // skateboard under the feet
-            let board = SKNode(); board.zRotation = face + .pi / 2
-            board.addChild(Art.circle(-14, 16, 4, ride.wheels))
-            board.addChild(Art.circle(14, 16, 4, ride.wheels))
-            board.addChild(Art.fillRoundRect(-22, 4, 44, 10, 5, ride.deck))
-            board.addChild(Art.fillRoundRect(-22, 4, 44, 3, 3, SKColor(white: 1, alpha: 0.2)))
-            rig.addChild(board)
-            riderBody(into: rig, ride: ride, holdingBars: false)
+            if !airborne && !moving {
+                stoppedSkater(into: rig, ride: ride)      // standing, board held vertical
+            } else {
+                boardUnderFeet(into: rig, ride: ride)     // rolling: board flat under the feet
+                skatingRider(into: rig, ride: ride, pushing: moving && !airborne)
+            }
+            if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }   // face the way you roll
         } else {
-            // scooter: deck + stem + T-bar
+            // scooter: deck + stem + T-bar (top-down, points where you go)
             let scoot = SKNode(); scoot.zRotation = face + .pi / 2
             scoot.addChild(Art.circle(0, 18, 5, ride.wheels))
             scoot.addChild(Art.circle(0, -14, 5, ride.wheels))
-            scoot.addChild(Art.line(0, 16, 0, -12, 7, ride.deck))     // deck + stem
-            scoot.addChild(Art.line(0, -12, 0, -26, 7, ride.deck))    // stem up
-            scoot.addChild(Art.line(-11, -26, 11, -26, 7, ride.deck)) // T-bar
+            scoot.addChild(Art.line(0, 16, 0, -12, 7, ride.deck))
+            scoot.addChild(Art.line(0, -12, 0, -26, 7, ride.deck))
+            scoot.addChild(Art.line(-11, -26, 11, -26, 7, ride.deck))
             rig.addChild(scoot)
-            riderBody(into: rig, ride: ride, holdingBars: true)
+            scooterRider(into: rig, ride: ride)
         }
         spinner.addChild(rig)
         return spinner
     }
 
-    private static func riderBody(into rig: SKNode, ride: Rideable, holdingBars: Bool) {
+    /// Board lying flat under the feet (side profile), fixed under the rider.
+    private static func boardUnderFeet(into rig: SKNode, ride: Rideable) {
+        rig.addChild(Art.circle(-14, 17, 4, ride.wheels))
+        rig.addChild(Art.circle(14, 17, 4, ride.wheels))
+        rig.addChild(Art.fillRoundRect(-22, 7, 44, 9, 5, ride.deck))
+        rig.addChild(Art.fillRoundRect(-22, 7, 44, 3, 3, SKColor(white: 1, alpha: 0.2)))
+    }
+
+    /// Rolling stance: knees bent, one foot pushing when moving.
+    private static func skatingRider(into rig: SKNode, ride: Rideable, pushing: Bool) {
+        if pushing {
+            rig.addChild(Art.line(-6, -16, -6, -2, 5, Palette.wall))   // front foot on deck
+            rig.addChild(Art.line(4, -15, 13, -1, 5, Palette.wall))    // back foot kicking to push
+        } else {
+            rig.addChild(Art.line(-6, -16, -7, -2, 5, Palette.wall))   // both feet on the board
+            rig.addChild(Art.line(6, -16, 7, -2, 5, Palette.wall))
+        }
+        torsoHead(into: rig, ride: ride)
+        rig.addChild(Art.line(-9, -32, -16, -26, 5, Palette.riderRed)) // arms out for balance
+        rig.addChild(Art.line(9, -32, 16, -38, 5, Palette.riderRed))
+    }
+
+    /// Stopped: standing, board held upright beside the rider.
+    private static func stoppedSkater(into rig: SKNode, ride: Rideable) {
+        rig.addChild(Art.line(-4, -18, -4, -2, 5, Palette.wall))       // feet together
+        rig.addChild(Art.line(4, -18, 4, -2, 5, Palette.wall))
+        // skateboard held VERTICAL (nose up), wheels to the outside
+        rig.addChild(Art.fillRoundRect(12, -38, 11, 52, 5, ride.deck))
+        rig.addChild(Art.fillRoundRect(12, -38, 4, 52, 3, SKColor(white: 1, alpha: 0.2)))
+        rig.addChild(Art.circle(26, -25, 4, ride.wheels))
+        rig.addChild(Art.circle(26, 3, 4, ride.wheels))
+        torsoHead(into: rig, ride: ride)
+        rig.addChild(Art.line(9, -32, 14, -22, 5, Palette.riderRed))   // hand holding the board
+        rig.addChild(Art.line(-9, -32, -12, -22, 5, Palette.riderRed))
+    }
+
+    private static func scooterRider(into rig: SKNode, ride: Rideable) {
         rig.addChild(Art.line(-5, -4, -6, -18, 5, Palette.wall))
         rig.addChild(Art.line(5, -4, 6, -18, 5, Palette.wall))
+        torsoHead(into: rig, ride: ride)
+        rig.addChild(Art.line(-6, -30, -2, -40, 5, Palette.riderRed))  // arms grip the bars
+        rig.addChild(Art.line(6, -30, 2, -40, 5, Palette.riderRed))
+    }
+
+    private static func torsoHead(into rig: SKNode, ride: Rideable) {
         rig.addChild(Art.fillRoundRect(-10, -38, 20, 24, 8, Palette.riderRed))
         rig.addChild(Art.fillRoundRect(-10, -38, 20, 6, 6, SKColor(white: 1, alpha: 0.15)))
-        if holdingBars {
-            rig.addChild(Art.line(-6, -30, -2, -40, 5, Palette.riderRed))
-            rig.addChild(Art.line(6, -30, 2, -40, 5, Palette.riderRed))
-        }
         rig.addChild(Art.circle(0, -46, 8, Palette.skinTone))
         rig.addChild(Art.topArc(0, -48, 9, ride.deck))
         rig.addChild(Art.fillRect(-9, -49, 18, 3, ride.deck))

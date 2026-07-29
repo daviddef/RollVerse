@@ -12,6 +12,7 @@ final class GameScene: SKScene {
 
     // MARK: node graph
     private let worldRoot = SKNode()
+    private let ragLayer = SKNode()        // ragdolls: non-flipped, physics-driven
     private let cameraNode = SKCameraNode()
     private let hud = HUD()
     private let controls = Controls()
@@ -57,6 +58,11 @@ final class GameScene: SKScene {
     }()
     private var playerRig = SKNode()
 
+    // MARK: bail state (skater ragdoll on a hard crash)
+    private var bailing = false
+    private var bailTimer: CGFloat = 0
+    private var skaterRagdoll: Ragdoll?
+
     // MARK: input buffers (edge-triggered, like jumpBuf/trickBuf/switchBuf)
     private var jumpBuf = false, trickBuf = false, switchBuf = false
 
@@ -77,6 +83,10 @@ final class GameScene: SKScene {
 
         worldRoot.yScale = -1          // flip into the web build's y-down space
         addChild(worldRoot)
+
+        // top-down world -> no gravity; ragdolls tumble from impulses + damping
+        physicsWorld.gravity = .zero
+        addChild(ragLayer)             // sibling of worldRoot, not flipped
 
         // camera + fixed overlays
         addChild(cameraNode)
@@ -148,7 +158,7 @@ final class GameScene: SKScene {
             let sp = SKSpriteNode(); sp.zPosition = -100_000; cameraNode.addChild(sp); sky = sp
         }
         sky?.texture = SkyTexture.make(size: s)
-        sky?.size = s
+        sky?.size = CGSize(width: s.width * 1.25, height: s.height * 1.25)  // room for parallax drift
         sky?.position = .zero
     }
 
@@ -170,6 +180,15 @@ final class GameScene: SKScene {
                 jail = false; hud.hideJail()
                 px = 300; py = 900; vx = 0; vy = 0; z = 0; onGround = true
             }
+            return
+        }
+
+        if bailing {                       // skater is a ragdoll; world keeps living
+            bailTimer -= dt
+            updatePeds(dt); updateCars(dt)
+            if heat > 0 { coolHeatSilent(6 * dt) }
+            updateCamera(dt)
+            if bailTimer <= 0 { endBail() }
             return
         }
 
@@ -358,6 +377,11 @@ final class GameScene: SKScene {
 
     private func updatePeds(_ t: CGFloat) {
         for pd in peds {
+            if pd.downed {                 // lying as a ragdoll; count down, then get up
+                pd.downTimer -= t
+                if pd.downTimer <= 0 { getUpPed(pd) }
+                continue
+            }
             pd.timer -= t
             if pd.timer <= 0 {
                 pd.tx = 80 + CGFloat.random(in: 0...(World.width - 160))
@@ -377,16 +401,13 @@ final class GameScene: SKScene {
                 if z > 26 {
                     if !pd.hopped { pd.hopped = true; addScore(15); pop("HOP! +15", Palette.cyan, pd.x, pd.y - 40) }
                 } else if onGround {
-                    if !pd.bumped {
-                        pd.bumped = true
-                        let b = max(hypot2(ddx, ddy), 1)
-                        pd.vx = -ddx / b * 220; pd.vy = -ddy / b * 220; pd.boing = 0.5
-                        vx *= -0.3; vy *= -0.3
-                        addScore(-25); addHeat(26)
-                        if grinding { endGrind() }
-                        if combo > 0 { combo = 0; comboScore = 0; hud.setCombo(0) }
-                        pop("CRASH! -25", Palette.coral, pd.x, pd.y - 36)
-                    }
+                    // smash a pedestrian -> they ragdoll away, you break your combo + gain Heat
+                    knockDownPed(pd, dirX: -ddx, dirY: -ddy, power: 1.1, flatten: false, downFor: 2.2)
+                    vx *= -0.3; vy *= -0.3
+                    addScore(-25); addHeat(26)
+                    if grinding { endGrind() }
+                    if combo > 0 { combo = 0; comboScore = 0; hud.setCombo(0) }
+                    pop("CRASH! -25", Palette.coral, pd.x, pd.y - 36)
                 }
             } else { pd.hopped = false; pd.bumped = false }
         }
@@ -409,8 +430,18 @@ final class GameScene: SKScene {
                     if grinding { endGrind() }
                     combo = 0; comboScore = 0; hud.setCombo(0)
                     pop("CAR! -40", Palette.coral, px, py - 40)
+                    startBail(dirX: dx, dirY: dy)          // the skater eats it, ragdoll flies
                 }
             } else { ca.hit = false }
+
+            // cars flatten pedestrians who wander into the road (ambient slapstick)
+            for pd in peds where !pd.downed {
+                if abs(pd.x - ca.x) < 26 && abs(pd.y - ca.y) < 42 {
+                    knockDownPed(pd, dirX: CGFloat.random(in: -0.3...0.3), dirY: ca.dir,
+                                 power: 1.7, flatten: true, downFor: 2.8)
+                    pop("SPLAT!", Palette.gold, pd.x, pd.y - 30)
+                }
+            }
         }
     }
 
@@ -436,7 +467,9 @@ final class GameScene: SKScene {
     // MARK: camera
 
     private func updateCamera(_ dt: CGFloat) {
-        let target = CGPoint(x: px, y: z - py)
+        // Look ahead in the direction of travel for a more dynamic, 3D-ish feel.
+        let lead: CGFloat = reduce ? 0 : 0.18
+        let target = CGPoint(x: px + vx * lead, y: z - py - vy * lead)
         let k = reduce ? 1 : min(1, 6 * dt)
         cameraNode.position = CGPoint(x: cameraNode.position.x + (target.x - cameraNode.position.x) * k,
                                       y: cameraNode.position.y + (target.y - cameraNode.position.y) * k)
@@ -451,6 +484,58 @@ final class GameScene: SKScene {
         l.run(.sequence([.group([.moveBy(x: 0, y: -30, duration: 0.9),
                                  .fadeOut(withDuration: 0.9)]),
                          .removeFromParent()]))
+    }
+
+    // MARK: ragdolls
+
+    /// Spawn a physics ragdoll. World point (x, y-down) maps to ragLayer point (x, -y),
+    /// and the hit direction's y-component flips into ragLayer's y-up space.
+    @discardableResult
+    private func spawnRagdoll(_ style: RagdollStyle, worldX: CGFloat, worldY: CGFloat,
+                              dirWorld: CGVector, power: CGFloat, spin: CGFloat, flatten: Bool = false) -> Ragdoll {
+        let rag = Ragdoll(style: style)
+        rag.root.position = CGPoint(x: worldX, y: -worldY)
+        rag.root.zPosition = worldY
+        ragLayer.addChild(rag.root)
+        rag.wireJoints(in: physicsWorld)
+        rag.activate(dir: CGVector(dx: dirWorld.dx, dy: -dirWorld.dy), power: power, spin: spin, flatten: flatten)
+        rag.root.run(.sequence([.wait(forDuration: 1.1), .run { rag.freeze() }]))
+        return rag
+    }
+
+    private func knockDownPed(_ pd: Ped, dirX: CGFloat, dirY: CGFloat, power: CGFloat, flatten: Bool, downFor: CGFloat) {
+        pd.downed = true; pd.downTimer = downFor; pd.bumped = true
+        pd.node?.isHidden = true
+        let spin = (Bool.random() ? 1 : -1) * CGFloat.random(in: 0.03...0.07)
+        pd.ragdoll = spawnRagdoll(.pedestrian(hue: pd.hue), worldX: pd.x, worldY: pd.y,
+                                  dirWorld: CGVector(dx: dirX, dy: dirY), power: power, spin: spin, flatten: flatten)
+    }
+
+    private func getUpPed(_ pd: Ped) {
+        pd.ragdoll?.fadeAndRemove(after: 0)
+        pd.ragdoll = nil
+        pd.downed = false; pd.bumped = false; pd.hopped = false
+        pd.vx = 0; pd.vy = 0; pd.boing = 0; pd.timer = 0
+        pd.node?.isHidden = false
+        pop("★", Palette.gold, pd.x, pd.y - 44)   // dizzy, then walks off
+    }
+
+    private func startBail(dirX: CGFloat, dirY: CGFloat) {
+        guard !bailing else { return }
+        bailing = true; bailTimer = 1.1
+        playerRig.isHidden = true; playerShadow.isHidden = true
+        onGround = true; z = 0; vz = 0; spin = 0; flip = false
+        if grinding { endGrind() }
+        let s = (Bool.random() ? 1 : -1) * CGFloat.random(in: 0.04...0.08)
+        skaterRagdoll = spawnRagdoll(.skater(deck: ride().deck), worldX: px, worldY: py,
+                                     dirWorld: CGVector(dx: dirX, dy: dirY), power: 1.4, spin: s)
+    }
+
+    private func endBail() {
+        bailing = false
+        skaterRagdoll?.fadeAndRemove(after: 0); skaterRagdoll = nil
+        playerRig.isHidden = false; playerShadow.isHidden = false
+        vx = 0; vy = 0; jumpBuf = false; trickBuf = false
     }
 
     // MARK: node sync (positions the live model onto SpriteKit nodes each frame)
@@ -488,10 +573,17 @@ final class GameScene: SKScene {
 
         // rebuild the player rig from live state (cheap: one node)
         playerRig.removeFromParent()
-        playerRig = Entities.playerRig(ride: ride(), face: face, spin: spin, flip: flip, airborne: !onGround)
+        let movingNow = onGround && hypot2(vx, vy) > 28
+        playerRig = Entities.playerRig(ride: ride(), face: face, spin: spin, flip: flip,
+                                       airborne: !onGround, moving: movingNow)
         playerRig.position = CGPoint(x: px, y: py - z)
         playerRig.zPosition = py
+        playerRig.setScale(1 + z * 0.0018)          // pop toward the camera on air (fake-3D lift)
+        playerRig.isHidden = bailing
         worldRoot.addChild(playerRig)
+
+        // subtle sky parallax -> depth behind the world (stays within the oversized sky)
+        sky?.position = CGPoint(x: -cameraNode.position.x * 0.012, y: -cameraNode.position.y * 0.012)
     }
 
     // MARK: touch handling (forwarded to Controls; intro tap-to-start)

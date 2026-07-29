@@ -67,6 +67,11 @@ final class Ped {
     var bumped = false
     var node: SKNode?
 
+    // ragdoll / knocked-down state
+    var downed = false
+    var downTimer: CGFloat = 0
+    var ragdoll: Ragdoll?
+
     init(x: CGFloat, y: CGFloat, hue: CGFloat) { self.x = x; self.y = y; self.hue = hue }
 }
 
