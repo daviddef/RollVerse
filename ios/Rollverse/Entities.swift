@@ -341,15 +341,9 @@ enum Entities {
             }
             if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }   // face the way you roll
         } else {
-            // scooter: deck + stem + T-bar (top-down, points where you go)
-            let scoot = SKNode(); scoot.zRotation = face + .pi / 2
-            scoot.addChild(Art.circle(0, 18, 5, ride.wheels))
-            scoot.addChild(Art.circle(0, -14, 5, ride.wheels))
-            scoot.addChild(Art.line(0, 16, 0, -12, 7, ride.deck))
-            scoot.addChild(Art.line(0, -12, 0, -26, 7, ride.deck))
-            scoot.addChild(Art.line(-11, -26, 11, -26, 7, ride.deck))
-            rig.addChild(scoot)
-            scooterRider(into: rig, ride: ride)
+            scooterUnderFeet(into: rig, ride: ride)
+            scooterRider(into: rig, ride: ride, pushing: moving && !airborne)
+            if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }   // face the way you roll
         }
         spinner.addChild(rig)
         return spinner
@@ -391,12 +385,28 @@ enum Entities {
         rig.addChild(Art.line(-9, -32, -12, -22, 5, Palette.riderRed))
     }
 
-    private static func scooterRider(into rig: SKNode, ride: Rideable) {
-        rig.addChild(Art.line(-5, -4, -6, -18, 5, Palette.wall))
-        rig.addChild(Art.line(5, -4, 6, -18, 5, Palette.wall))
+    /// Side-view scooter under the feet: deck + two wheels + steering column + T-bar.
+    private static func scooterUnderFeet(into rig: SKNode, ride: Rideable) {
+        rig.addChild(Art.circle(-16, 18, 5, ride.wheels))              // rear wheel
+        rig.addChild(Art.circle(18, 18, 5, ride.wheels))              // front wheel
+        rig.addChild(Art.fillRoundRect(-22, 9, 44, 7, 3, ride.deck))  // deck
+        rig.addChild(Art.fillRoundRect(-22, 9, 44, 2, 2, SKColor(white: 1, alpha: 0.2)))
+        rig.addChild(Art.line(18, 14, 18, -40, 6, ride.deck))         // steering column
+        rig.addChild(Art.line(9, -40, 27, -40, 6, ride.deck))         // handlebar
+    }
+
+    /// Rider standing on the scooter, hands forward on the bars (push kick when moving).
+    private static func scooterRider(into rig: SKNode, ride: Rideable, pushing: Bool) {
+        if pushing {
+            rig.addChild(Art.line(-4, -16, -4, 7, 5, Palette.wall))    // planted foot on deck
+            rig.addChild(Art.line(6, -14, 15, 9, 5, Palette.wall))     // back foot pushing off
+        } else {
+            rig.addChild(Art.line(-5, -16, -5, 7, 5, Palette.wall))    // both feet on the deck
+            rig.addChild(Art.line(5, -16, 5, 7, 5, Palette.wall))
+        }
         torsoHead(into: rig, ride: ride)
-        rig.addChild(Art.line(-6, -30, -2, -40, 5, Palette.riderRed))  // arms grip the bars
-        rig.addChild(Art.line(6, -30, 2, -40, 5, Palette.riderRed))
+        rig.addChild(Art.line(3, -34, 17, -40, 5, Palette.riderRed))   // arms reach to the bars
+        rig.addChild(Art.line(1, -30, 15, -39, 5, Palette.riderRed))
     }
 
     private static func torsoHead(into rig: SKNode, ride: Rideable) {

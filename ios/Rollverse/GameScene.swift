@@ -93,6 +93,7 @@ final class GameScene: SKScene {
         // camera + fixed overlays
         addChild(cameraNode)
         camera = cameraNode
+        cameraNode.setScale(1.25)          // zoom out ~25% (HUD/controls are camera children, unaffected)
         cameraNode.position = CGPoint(x: px, y: z - py)
         cameraNode.addChild(hud)
         cameraNode.addChild(controls)
