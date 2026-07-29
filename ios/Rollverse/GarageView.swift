@@ -14,12 +14,21 @@ final class GarageStore: ObservableObject {
     @Published var coins = 0                       // wallet
     @Published var ownedSkins: Set<String> = ["classic"]
     @Published var equippedSkin = "classic"
+    @Published var ownedOutfits: Set<String> = ["classic"]
+    @Published var equippedOutfit = "classic"
 
     func owns(_ id: String) -> Bool { ownedSkins.contains(id) }
     func canAfford(_ s: Skin) -> Bool { coins >= s.price }
     func buyOrEquip(_ s: Skin) {
         if owns(s.id) { equippedSkin = s.id }
         else if coins >= s.price { coins -= s.price; ownedSkins.insert(s.id); equippedSkin = s.id }
+    }
+
+    func ownsOutfit(_ id: String) -> Bool { ownedOutfits.contains(id) }
+    func canAffordOutfit(_ o: Outfit) -> Bool { coins >= o.price }
+    func buyOrEquipOutfit(_ o: Outfit) {
+        if ownsOutfit(o.id) { equippedOutfit = o.id }
+        else if coins >= o.price { coins -= o.price; ownedOutfits.insert(o.id); equippedOutfit = o.id }
     }
 
     enum Dial { case deck, wheels, trucks, bearings }
@@ -105,6 +114,7 @@ struct GarageView: View {
                         .background(RoundedRectangle(cornerRadius: 14).fill(Color(hex: 0x181426)))
 
                         skinsSection
+                        outfitsSection
                     }
                 }
             }
@@ -146,6 +156,63 @@ struct GarageView: View {
         }
         .buttonStyle(.plain)
         .disabled(!owned && !store.canAfford(s))
+    }
+
+    private var outfitsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("OUTFITS — DRESS YOUR SKATER").font(.system(size: 12, weight: .heavy))
+                .foregroundColor(Color(hex: 0xa79fc4)).kerning(1.4)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) { ForEach(Outfits.all) { fit($0) } }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color(hex: 0x181426)))
+    }
+
+    private func fit(_ o: Outfit) -> some View {
+        let owned = store.ownsOutfit(o.id)
+        let equipped = store.equippedOutfit == o.id
+        return Button { store.buyOrEquipOutfit(o) } label: {
+            VStack(spacing: 4) {
+                figure(o)
+                    .frame(width: 44, height: 46)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: 0x0b0913)))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .stroke(equipped ? Color.white : Color.white.opacity(0.15), lineWidth: equipped ? 3 : 1))
+                Text(o.name).font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                Text(equipped ? "WORN" : (owned ? "Owned" : "🪙\(o.price)"))
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(equipped ? Color(hex: 0xc6ff42)
+                                     : (owned ? Color(hex: 0xa79fc4)
+                                        : (store.canAffordOutfit(o) ? Color(hex: 0xffce4a) : Color(hex: 0x6f6790))))
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x221c34)))
+        }
+        .buttonStyle(.plain)
+        .disabled(!owned && !store.canAffordOutfit(o))
+    }
+
+    /// A tiny front-on preview of the outfit (head + headgear + shirt + legs).
+    private func figure(_ o: Outfit) -> some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Circle().fill(Color(hex: 0xf3ceac)).frame(width: 14, height: 14)     // head
+                switch o.head {
+                case .cap:    Capsule().fill(Color(hex: o.headHex)).frame(width: 16, height: 7).offset(y: -5)
+                case .helmet: Circle().fill(Color(hex: o.headHex)).frame(width: 17, height: 17).offset(y: -1)
+                case .beanie: Capsule().fill(Color(hex: o.headHex)).frame(width: 15, height: 9).offset(y: -3)
+                case .bare:   EmptyView()
+                }
+            }
+            RoundedRectangle(cornerRadius: 3).fill(Color(hex: o.body)).frame(width: 18, height: 16)   // shirt
+            HStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: o.legs)).frame(width: 6, height: 10)
+                RoundedRectangle(cornerRadius: 1.5).fill(Color(hex: o.legs)).frame(width: 6, height: 10)
+            }
+        }
     }
 
     private func dial(_ title: String, _ opt: Gear.Opt, _ d: GarageStore.Dial) -> some View {

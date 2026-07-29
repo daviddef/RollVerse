@@ -37,6 +37,27 @@ enum Skins {
     static func skin(_ id: String) -> Skin { all.first { $0.id == id } ?? all[0] }
 }
 
+// Skater outfits — dress your guy. Shirt + pants colours + headgear style.
+enum Headgear { case cap, helmet, beanie, bare }
+
+struct Outfit: Identifiable {
+    let id: String; let name: String; let price: Int
+    let body: UInt32; let legs: UInt32; let head: Headgear; let headHex: UInt32
+}
+
+enum Outfits {
+    static let all: [Outfit] = [
+        Outfit(id: "classic", name: "Classic",      price: 0,  body: 0xef4d3a, legs: 0x2a2436, head: .cap,    headHex: 0x1c1830),
+        Outfit(id: "hoodie",  name: "Hoodie",       price: 40, body: 0x4a6fa5, legs: 0x2f2b3a, head: .beanie, headHex: 0x35507a),
+        Outfit(id: "flannel", name: "Flannel",      price: 40, body: 0x9a4a4a, legs: 0x3a3550, head: .beanie, headHex: 0x2a2436),
+        Outfit(id: "pro",     name: "Pro Team",     price: 60, body: 0x37d6e6, legs: 0x1a1626, head: .cap,    headHex: 0xffce4a),
+        Outfit(id: "helmet",  name: "Safety First", price: 50, body: 0xffce4a, legs: 0x2a2436, head: .helmet, headHex: 0xefeafc),
+        Outfit(id: "neon",    name: "Neon",         price: 80, body: 0xc6ff42, legs: 0x1a3a1a, head: .helmet, headHex: 0xa583ff),
+        Outfit(id: "shred",   name: "Shredder",     price: 90, body: 0x201a30, legs: 0x201a30, head: .cap,    headHex: 0xff5c39),
+    ]
+    static func outfit(_ id: String) -> Outfit { all.first { $0.id == id } ?? all[0] }
+}
+
 enum Gear {
     struct Opt { let name: String; let hint: String
                  let ts: CGFloat; let ac: CGFloat; let pop: CGFloat; let roll: CGFloat }

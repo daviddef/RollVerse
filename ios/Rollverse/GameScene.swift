@@ -812,8 +812,9 @@ final class GameScene: SKScene {
         if riggedRide.anchor == .feet {     // board skins recolour the deck
             riggedRide = riggedRide.withDeck(SKColor(hex: Skins.skin(garage?.equippedSkin ?? "classic").hex))
         }
+        let outfit = Outfits.outfit(garage?.equippedOutfit ?? "classic")
         playerRig = Entities.playerRig(ride: riggedRide, face: face, spin: spin, flip: flip,
-                                       airborne: !onGround, moving: movingNow)
+                                       airborne: !onGround, moving: movingNow, outfit: outfit)
         playerRig.setScale(1 + z * 0.0011)          // pop toward the camera on air (fake-3D lift)
         playerHolder.addChild(playerRig)
 

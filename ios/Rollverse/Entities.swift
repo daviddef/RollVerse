@@ -444,7 +444,7 @@ enum Entities {
     /// `face` orients the rider; `spin`/`flip` animate the trick; `moving` picks the
     /// rolling stance vs. the stopped (board-held-vertical) pose.
     static func playerRig(ride: Rideable, face: CGFloat, spin: CGFloat, flip: Bool,
-                          airborne: Bool, moving: Bool) -> SKNode {
+                          airborne: Bool, moving: Bool, outfit: Outfit) -> SKNode {
         let spinner = SKNode()
         if airborne && (spin != 0 || flip) {
             spinner.zRotation = spin * 0.12
@@ -456,16 +456,16 @@ enum Entities {
         let rig = SKNode()
         if ride.anchor == .feet {
             if !airborne && !moving {
-                stoppedSkater(into: rig, ride: ride)      // standing, board held vertical
+                stoppedSkater(into: rig, ride: ride, outfit: outfit)
             } else {
-                boardUnderFeet(into: rig, ride: ride)     // rolling: board flat under the feet
-                skatingRider(into: rig, ride: ride, pushing: moving && !airborne)
+                boardUnderFeet(into: rig, ride: ride)
+                skatingRider(into: rig, ride: ride, pushing: moving && !airborne, outfit: outfit)
             }
-            if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }   // face the way you roll
+            if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }
         } else {
             scooterUnderFeet(into: rig, ride: ride)
-            scooterRider(into: rig, ride: ride, pushing: moving && !airborne)
-            if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }   // face the way you roll
+            scooterRider(into: rig, ride: ride, pushing: moving && !airborne, outfit: outfit)
+            if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }
         }
         spinner.addChild(rig)
         return spinner
@@ -480,31 +480,32 @@ enum Entities {
     }
 
     /// Rolling stance: knees bent, one foot pushing when moving.
-    private static func skatingRider(into rig: SKNode, ride: Rideable, pushing: Bool) {
+    private static func skatingRider(into rig: SKNode, ride: Rideable, pushing: Bool, outfit: Outfit) {
+        let legC = SKColor(hex: outfit.legs), armC = SKColor(hex: outfit.body)
         if pushing {
-            rig.addChild(Art.line(-6, -16, -6, -2, 5, Palette.wall))   // front foot on deck
-            rig.addChild(Art.line(4, -15, 13, -1, 5, Palette.wall))    // back foot kicking to push
+            rig.addChild(Art.line(-6, -16, -6, -2, 5, legC))   // front foot on deck
+            rig.addChild(Art.line(4, -15, 13, -1, 5, legC))    // back foot kicking to push
         } else {
-            rig.addChild(Art.line(-6, -16, -7, -2, 5, Palette.wall))   // both feet on the board
-            rig.addChild(Art.line(6, -16, 7, -2, 5, Palette.wall))
+            rig.addChild(Art.line(-6, -16, -7, -2, 5, legC))   // both feet on the board
+            rig.addChild(Art.line(6, -16, 7, -2, 5, legC))
         }
-        torsoHead(into: rig, ride: ride)
-        rig.addChild(Art.line(-9, -32, -16, -26, 5, Palette.riderRed)) // arms out for balance
-        rig.addChild(Art.line(9, -32, 16, -38, 5, Palette.riderRed))
+        torsoHead(into: rig, outfit: outfit)
+        rig.addChild(Art.line(-9, -32, -16, -26, 5, armC))     // arms out for balance
+        rig.addChild(Art.line(9, -32, 16, -38, 5, armC))
     }
 
     /// Stopped: standing, board held upright beside the rider.
-    private static func stoppedSkater(into rig: SKNode, ride: Rideable) {
-        rig.addChild(Art.line(-4, -18, -4, -2, 5, Palette.wall))       // feet together
-        rig.addChild(Art.line(4, -18, 4, -2, 5, Palette.wall))
-        // skateboard held VERTICAL (nose up), wheels to the outside
-        rig.addChild(Art.fillRoundRect(12, -38, 11, 52, 5, ride.deck))
+    private static func stoppedSkater(into rig: SKNode, ride: Rideable, outfit: Outfit) {
+        let legC = SKColor(hex: outfit.legs), armC = SKColor(hex: outfit.body)
+        rig.addChild(Art.line(-4, -18, -4, -2, 5, legC))       // feet together
+        rig.addChild(Art.line(4, -18, 4, -2, 5, legC))
+        rig.addChild(Art.fillRoundRect(12, -38, 11, 52, 5, ride.deck))   // board held vertical
         rig.addChild(Art.fillRoundRect(12, -38, 4, 52, 3, SKColor(white: 1, alpha: 0.2)))
         rig.addChild(Art.circle(26, -25, 4, ride.wheels))
         rig.addChild(Art.circle(26, 3, 4, ride.wheels))
-        torsoHead(into: rig, ride: ride)
-        rig.addChild(Art.line(9, -32, 14, -22, 5, Palette.riderRed))   // hand holding the board
-        rig.addChild(Art.line(-9, -32, -12, -22, 5, Palette.riderRed))
+        torsoHead(into: rig, outfit: outfit)
+        rig.addChild(Art.line(9, -32, 14, -22, 5, armC))       // hand holding the board
+        rig.addChild(Art.line(-9, -32, -12, -22, 5, armC))
     }
 
     /// Side-view scooter under the feet: deck + two wheels + steering column + T-bar.
@@ -518,24 +519,38 @@ enum Entities {
     }
 
     /// Rider standing on the scooter, hands forward on the bars (push kick when moving).
-    private static func scooterRider(into rig: SKNode, ride: Rideable, pushing: Bool) {
+    private static func scooterRider(into rig: SKNode, ride: Rideable, pushing: Bool, outfit: Outfit) {
+        let legC = SKColor(hex: outfit.legs), armC = SKColor(hex: outfit.body)
         if pushing {
-            rig.addChild(Art.line(-4, -16, -4, 7, 5, Palette.wall))    // planted foot on deck
-            rig.addChild(Art.line(6, -14, 15, 9, 5, Palette.wall))     // back foot pushing off
+            rig.addChild(Art.line(-4, -16, -4, 7, 5, legC))    // planted foot on deck
+            rig.addChild(Art.line(6, -14, 15, 9, 5, legC))     // back foot pushing off
         } else {
-            rig.addChild(Art.line(-5, -16, -5, 7, 5, Palette.wall))    // both feet on the deck
-            rig.addChild(Art.line(5, -16, 5, 7, 5, Palette.wall))
+            rig.addChild(Art.line(-5, -16, -5, 7, 5, legC))    // both feet on the deck
+            rig.addChild(Art.line(5, -16, 5, 7, 5, legC))
         }
-        torsoHead(into: rig, ride: ride)
-        rig.addChild(Art.line(3, -34, 17, -40, 5, Palette.riderRed))   // arms reach to the bars
-        rig.addChild(Art.line(1, -30, 15, -39, 5, Palette.riderRed))
+        torsoHead(into: rig, outfit: outfit)
+        rig.addChild(Art.line(3, -34, 17, -40, 5, armC))       // arms reach to the bars
+        rig.addChild(Art.line(1, -30, 15, -39, 5, armC))
     }
 
-    private static func torsoHead(into rig: SKNode, ride: Rideable) {
-        rig.addChild(Art.fillRoundRect(-10, -38, 20, 24, 8, Palette.riderRed))
+    /// Torso + head, wearing the chosen outfit (shirt colour + headgear style).
+    private static func torsoHead(into rig: SKNode, outfit: Outfit) {
+        rig.addChild(Art.fillRoundRect(-10, -38, 20, 24, 8, SKColor(hex: outfit.body)))
         rig.addChild(Art.fillRoundRect(-10, -38, 20, 6, 6, SKColor(white: 1, alpha: 0.15)))
         rig.addChild(Art.circle(0, -46, 8, Palette.skinTone))
-        rig.addChild(Art.topArc(0, -48, 9, ride.deck))
-        rig.addChild(Art.fillRect(-9, -49, 18, 3, ride.deck))
+        let hc = SKColor(hex: outfit.headHex)
+        switch outfit.head {
+        case .cap:
+            rig.addChild(Art.topArc(0, -48, 9, hc))
+            rig.addChild(Art.fillRect(-9, -49, 18, 3, hc))                       // brim
+        case .helmet:
+            rig.addChild(Art.circle(0, -47, 10, hc))                             // full shell
+            rig.addChild(Art.fillRect(-11, -43, 22, 2.5, SKColor(white: 0, alpha: 0.25)))
+        case .beanie:
+            rig.addChild(Art.topArc(0, -49, 9, hc))
+            rig.addChild(Art.fillRoundRect(-9, -50, 18, 5, 2, hc))               // fold band
+        case .bare:
+            break
+        }
     }
 }
