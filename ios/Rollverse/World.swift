@@ -143,6 +143,24 @@ enum World {
     static let lanes: [CGFloat] = [1420, 1560, 1940, 2080]
 
     static func onRoad(_ x: CGFloat) -> Bool { x > Road.x0 && x < Road.x1 }
+
+    // Footprints of the skate objects — pedestrians steer out of these.
+    static let trickRects: [CGRect] = {
+        var r: [CGRect] = []
+        func pad(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) { r.append(CGRect(x: x - 22, y: y - 22, width: w + 44, height: h + 44)) }
+        for o in ramps { pad(o.x - o.w / 2, o.y - o.h / 2, o.w, o.h) }
+        for o in halfpipes { pad(o.x, o.y - 30, o.w, o.h + 60) }
+        for o in funboxes { pad(o.x, o.y, o.w, o.h) }
+        for o in pyramids { pad(o.x, o.y, o.w, o.h) }
+        for o in banks { pad(o.x, o.y, o.w, o.h) }
+        for o in boosters { pad(o.x - o.len / 2, o.y - 26, o.len, 52) }
+        for o in dropins { pad(o.x - 52, o.y - 42, 104, 84) }
+        pad(practicePad.minX, practicePad.minY, practicePad.width, practicePad.height)
+        return r
+    }()
+    static func inTrickArea(_ x: CGFloat, _ y: CGFloat) -> Bool {
+        trickRects.contains { $0.contains(CGPoint(x: x, y: y)) }
+    }
 }
 
 // ---- Mutable entity models (positions live in world coords) ----
@@ -179,14 +197,22 @@ final class Car {
 
 struct Guard { var x, y: CGFloat }
 
-// Boats drifting on the sea (ambient).
+// Boats drifting on the sea (hazards — hit one and the sea patrol comes).
 final class Boat {
     var x, y, dir, spd: CGFloat
     let col: SKColor
+    var hit = false
     var node: SKNode?
     init(x: CGFloat, y: CGFloat, dir: CGFloat, spd: CGFloat, col: SKColor) {
         self.x = x; self.y = y; self.dir = dir; self.spd = spd; self.col = col
     }
+}
+
+// A rolling swell you can surf, travelling toward shore (-x).
+final class Wave {
+    var x: CGFloat
+    var node: SKNode?
+    init(x: CGFloat) { self.x = x }
 }
 
 final class Coin {

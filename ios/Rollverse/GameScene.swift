@@ -55,6 +55,10 @@ final class GameScene: SKScene {
     private var peds: [Ped] = []
     private var cars: [Car] = []
     private var boats: [Boat] = []
+    private var waves: [Wave] = []
+    private var seaPatrol: Boat?
+    private var patrolNode = Entities.buildPatrolBoat()
+    private var surfCd: CGFloat = 0
     private var guard_: Guard?
     private var guardNode = Entities.buildGuard()
     private var pickupTaken = false
@@ -223,6 +227,23 @@ final class GameScene: SKScene {
                           col: SKColor.hsl(CGFloat.random(in: 0...360), 0.5, 0.55))
             let n = Entities.buildBoat(bt); n.yScale = up; worldRoot.addChild(n); bt.node = n
             boats.append(bt)
+        }
+
+        // rideable swells rolling toward shore
+        for i in 0..<3 {
+            let wv = Wave(x: World.Sea.oceanX0 + 220 + CGFloat(i) * 320)
+            let n = Entities.buildWave(); n.position = CGPoint(x: wv.x, y: World.height / 2)
+            worldRoot.addChild(n); wv.node = n; waves.append(wv)
+        }
+
+        // park gateway signs at the district boundaries (arriving somewhere new)
+        let gates: [(CGFloat, String)] = [
+            (World.Road.x0, "The Road"), (World.Road.x1, "Bowl Park"),
+            (World.Sea.beachX0, "Beachside"), (World.Sea.oceanX0, "The Sea"),
+        ]
+        for (gx, name) in gates {
+            let g = Entities.buildGateway(name); g.position = CGPoint(x: gx, y: 250); g.zPosition = 250; g.yScale = up
+            worldRoot.addChild(g)
         }
 
         // pedestrians
@@ -489,7 +510,7 @@ final class GameScene: SKScene {
             bikeNode?.removeFromParent(); bikeNode = nil
         }
 
-        updatePeds(t); updateCars(t); updateGuard(t); updateAnimals(t); updateBoats(t); updateWeather(t)
+        updatePeds(t); updateCars(t); updateGuard(t); updateAnimals(t); updateSea(t); updateWeather(t)
         if guard_ != nil {
             for tn in World.tunnels where px > tn.x && px < tn.x + tn.w && py > tn.y && py < tn.y + tn.h {
                 loseCopsInTunnel(); break
@@ -671,8 +692,13 @@ final class GameScene: SKScene {
             }
             pd.timer -= t
             if pd.timer <= 0 {
-                pd.tx = 80 + CGFloat.random(in: 0...(World.Sea.oceanX0 - 160))   // stay off the water
-                pd.ty = 80 + CGFloat.random(in: 0...(World.height - 160))
+                var tx: CGFloat = pd.x, ty: CGFloat = pd.y
+                for _ in 0..<6 {                                             // pick a spot off the water AND off the ramps
+                    tx = 80 + CGFloat.random(in: 0...(World.Sea.oceanX0 - 160))
+                    ty = 80 + CGFloat.random(in: 0...(World.height - 160))
+                    if !World.inTrickArea(tx, ty) { break }
+                }
+                pd.tx = tx; pd.ty = ty
                 pd.timer = 2 + CGFloat.random(in: 0...3)
             }
             if pd.boing > 0 {
@@ -682,6 +708,13 @@ final class GameScene: SKScene {
                 pd.x += dx / d * 30 * t; pd.y += dy / d * 30 * t
             }
             pd.x = clampf(pd.x, 20, World.Sea.oceanX0 - 20); pd.y = clampf(pd.y, 20, World.height - 20)
+            if let rect = World.trickRects.first(where: { $0.contains(CGPoint(x: pd.x, y: pd.y)) }) {
+                let dl = pd.x - rect.minX, dr = rect.maxX - pd.x, dtp = pd.y - rect.minY, dbt = rect.maxY - pd.y
+                let m = min(dl, dr, dtp, dbt)
+                if m == dl { pd.x = rect.minX - 2 } else if m == dr { pd.x = rect.maxX + 2 }
+                else if m == dtp { pd.y = rect.minY - 2 } else { pd.y = rect.maxY + 2 }
+                pd.timer = 0
+            }
 
             let ddx = px - pd.x, ddy = py - pd.y, dd = hypot2(ddx, ddy)
             if dd < 32 {
@@ -780,15 +813,59 @@ final class GameScene: SKScene {
         }
     }
 
-    // MARK: boats (ambient, drift on the sea)
+    // MARK: the sea (boats, waves, sea patrol)
 
-    private func updateBoats(_ t: CGFloat) {
+    private func updateSea(_ t: CGFloat) {
+        let inWater = px > World.Sea.oceanX0
+        // boats drift — hit one while surfing and the sea patrol comes
         for b in boats {
             b.y += b.dir * b.spd * t
             if b.y > World.height + 60 { b.y = -60 }
             if b.y < -60 { b.y = World.height + 60 }
             b.x = clampf(b.x + sin(b.y * 0.01) * 8 * t, World.Sea.oceanX0 + 40, World.width - 40)
+            if inWater && abs(px - b.x) < 34 && abs(py - b.y) < 30 {
+                if !b.hit {
+                    b.hit = true
+                    addScore(-50); if grinding { endGrind() }
+                    let d = max(hypot2(px - b.x, py - b.y), 1)
+                    vx = (px - b.x) / d * 260; vy = (py - b.y) / d * 260
+                    pop("BOAT! -50", Palette.coral, px, py - 40)
+                    if seaPatrol == nil { spawnSeaPatrol() }
+                }
+            } else { b.hit = false }
         }
+        // rolling swells -> catch one on the surfboard for a shoreward ride
+        if surfCd > 0 { surfCd -= t }
+        for w in waves {
+            w.x -= 75 * t
+            if w.x < World.Sea.oceanX0 - 40 { w.x = World.width - 60 }
+            if inWater && rideKey == "surf" && surfCd <= 0 && abs(px - w.x) < 40 && px > w.x - 34 {
+                surfCd = 0.7
+                vx = -340; face = atan2(vy, vx)          // ride the wave toward shore
+                addScore(20); pop("SURFING!", Palette.cyan, px, py - 50)
+            }
+        }
+        // sea patrol chase
+        if var p = seaPatrol {
+            let dx = px - p.x, dy = py - p.y, d = max(hypot2(dx, dy), 1)
+            p.x += dx / d * 230 * t; p.y += dy / d * 230 * t
+            seaPatrol = p
+            if d < 34 { caughtBySeaPatrol() }
+            else if px < World.Sea.oceanX0 - 120 { removeSeaPatrol(); pop("Lost the patrol!", Palette.volt, px, py - 60) }
+        }
+    }
+
+    private func spawnSeaPatrol() {
+        seaPatrol = Boat(x: px + 320, y: py + 120, dir: 0, spd: 0, col: Palette.cyan)
+        if patrolNode.parent == nil { patrolNode.yScale = 1 / tilt; worldRoot.addChild(patrolNode) }
+        pop("SEA PATROL!", Palette.coral, px, py - 70)
+    }
+    private func removeSeaPatrol() { seaPatrol = nil; patrolNode.removeFromParent() }
+    private func caughtBySeaPatrol() {
+        removeSeaPatrol()
+        addScore(-min(score, 150))
+        px = World.Sea.beachX0 - 60; vx = 0; vy = 0        // washed back to the beach
+        pop("BUSTED BY SEA PATROL!", Palette.coral, px, py - 60)
     }
 
     // MARK: cars
@@ -995,6 +1072,8 @@ final class GameScene: SKScene {
             b.node?.position = CGPoint(x: b.x, y: b.y)
             b.node?.zPosition = b.y
         }
+        for w in waves { w.node?.position = CGPoint(x: w.x, y: World.height / 2) }
+        if let p = seaPatrol { patrolNode.position = CGPoint(x: p.x, y: p.y); patrolNode.zPosition = p.y }
         if let g = guard_ {
             guardNode.position = CGPoint(x: g.x, y: g.y); guardNode.zPosition = g.y
         }

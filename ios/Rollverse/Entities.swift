@@ -136,36 +136,81 @@ enum Entities {
         return root
     }
 
-    /// The sea: deep water, drifting wave crests, and a foam line at the shore.
+    /// The sea: a live, animated water surface (GLSL shader) + a breaking shore foam.
     static func buildOcean() -> SKNode {
         let root = SKNode()
         root.zPosition = -960
         let x0 = World.Sea.oceanX0, w = World.width - x0, h = World.height
-        // water bands (lighter near the shore -> deeper out to sea)
-        let bands: [UInt32] = [0x2f89b0, 0x2877a0, 0x216690, 0x1b5680]
-        let bw = w / CGFloat(bands.count)
-        for (i, c) in bands.enumerated() {
-            root.addChild(Art.fillRect(x0 + CGFloat(i) * bw, 0, bw + 1, h, SKColor(hex: c)))
-        }
-        // shoreline foam
-        let foam = Art.fillRect(x0 - 6, 0, 20, h, SKColor(hex: 0xeaf6ff, alpha: 0.7))
-        foam.run(.repeatForever(.sequence([.fadeAlpha(to: 0.35, duration: 0.9), .fadeAlpha(to: 0.8, duration: 0.9)])))
+        let water = SKSpriteNode(color: SKColor(hex: 0x216690), size: CGSize(width: w, height: h))
+        water.position = CGPoint(x: x0 + w / 2, y: h / 2)
+        water.shader = SKShader(source: waterShader)
+        root.addChild(water)
+        // breaking foam at the shoreline
+        let foam = Art.fillRect(x0 - 8, 0, 24, h, SKColor(hex: 0xeaf6ff, alpha: 0.7))
+        foam.run(.repeatForever(.sequence([.fadeAlpha(to: 0.35, duration: 0.9), .fadeAlpha(to: 0.85, duration: 0.9)])))
         root.addChild(foam)
-        // drifting wave crests
-        for i in 0..<26 {
-            let wy = CGFloat((i * 137) % Int(h))
-            let wx = x0 + 30 + CGFloat((i * 311) % Int(w - 60))
-            let crest = Art.fillRoundRect(-26, -2, 52, 4, 2, SKColor(white: 1, alpha: 0.28))
-            crest.position = CGPoint(x: wx, y: wy)
-            let dur = 3.0 + Double(i % 5) * 0.6
-            crest.run(.repeatForever(.sequence([
-                .group([.moveBy(x: -34, y: 0, duration: dur), .fadeAlpha(to: 0.05, duration: dur)]),
-                .group([.moveBy(x: 34, y: 0, duration: 0), .fadeAlpha(to: 0.28, duration: 0.01)]),
-            ])))
-            root.addChild(crest)
-        }
         let sea = Art.label("SEA", size: 110, color: SKColor(hex: 0xffffff, alpha: 0.08)); sea.position = CGPoint(x: 4750, y: 300)
         root.addChild(sea)
+        return root
+    }
+
+    /// Animated water: layered sine swells + drifting foam, shading shallow->deep.
+    static let waterShader = """
+    void main() {
+        vec2 uv = v_tex_coord;
+        float t = u_time;
+        float w = sin(uv.y * 20.0 + t * 1.5) * 0.5
+                + sin(uv.x * 13.0 - t * 1.0) * 0.5
+                + sin((uv.x + uv.y) * 34.0 + t * 2.2) * 0.22;
+        vec3 shallow = vec3(0.27, 0.61, 0.73);
+        vec3 deep    = vec3(0.09, 0.31, 0.49);
+        vec3 col = mix(shallow, deep, clamp(uv.x + w * 0.05, 0.0, 1.0));
+        float foam = smoothstep(0.82, 0.99, sin(uv.y * 46.0 + t * 1.3 + w * 3.0) * 0.5 + 0.5);
+        col += foam * 0.14;
+        gl_FragColor = vec4(col, 1.0);
+    }
+    """
+
+    /// A rolling swell (rideable) — a translucent wall of water with a foam crest.
+    static func buildWave() -> SKNode {
+        let root = SKNode()
+        root.zPosition = -935
+        let h = World.height
+        root.addChild(Art.fillRoundRect(-22, -h / 2, 46, h, 18, SKColor(hex: 0x3f9cc4, alpha: 0.45)))
+        root.addChild(Art.fillRoundRect(-26, -h / 2, 12, h, 6, SKColor(hex: 0xeaf6ff, alpha: 0.75)))   // foam crest
+        return root
+    }
+
+    /// A sea-patrol boat (chases you if you hit a boat).
+    static func buildPatrolBoat() -> SKNode {
+        let root = SKNode()
+        root.addChild({ let s = SKShapeNode(ellipseOf: CGSize(width: 58, height: 20))
+            s.fillColor = SKColor(white: 0, alpha: 0.2); s.strokeColor = .clear; s.position = CGPoint(x: 0, y: 10); return s }())
+        let hull = CGMutablePath()
+        hull.move(to: CGPoint(x: -32, y: -6)); hull.addLine(to: CGPoint(x: 32, y: -6))
+        hull.addLine(to: CGPoint(x: 22, y: 14)); hull.addLine(to: CGPoint(x: -22, y: 14)); hull.closeSubpath()
+        let hn = SKShapeNode(path: hull); hn.fillColor = SKColor(hex: 0x2f3aa0); hn.strokeColor = SKColor(white: 1, alpha: 0.4); hn.lineWidth = 2
+        root.addChild(hn)
+        root.addChild(Art.fillRoundRect(-11, -18, 22, 14, 4, SKColor(hex: 0xeaf6ff)))     // cabin
+        let siren = Art.circle(0, -24, 5, Palette.coral)                                  // blinking siren
+        siren.run(.repeatForever(.sequence([.fadeAlpha(to: 0.2, duration: 0.3), .fadeAlpha(to: 1, duration: 0.3)])))
+        root.addChild(siren)
+        let bang = Art.label("!", size: 12, color: .white); bang.position = CGPoint(x: 0, y: -22); root.addChild(bang)
+        return root
+    }
+
+    /// A park gateway sign at a district boundary — makes crossing feel like arriving.
+    static func buildGateway(_ name: String) -> SKNode {
+        let root = SKNode()
+        root.addChild(Art.fillRoundRect(-74, -2, 8, 66, 3, SKColor(hex: 0x4a4460)))   // posts
+        root.addChild(Art.fillRoundRect(66, -2, 8, 66, 3, SKColor(hex: 0x4a4460)))
+        root.addChild(Art.fillRoundRect(-84, -74, 168, 34, 9, SKColor(hex: 0x2a2440)))
+        root.addChild(Art.fillRoundRect(-84, -74, 168, 34, 9, SKColor(hex: 0x2a2440)))
+        let strokeBanner = SKShapeNode(path: Art.roundRectPath(-84, -74, 168, 34, 9))
+        strokeBanner.strokeColor = Palette.volt; strokeBanner.lineWidth = 2; strokeBanner.fillColor = .clear
+        root.addChild(strokeBanner)
+        let l = Art.label(name.uppercased(), size: 17, color: Palette.volt); l.position = CGPoint(x: 0, y: -57)
+        root.addChild(l)
         return root
     }
 
