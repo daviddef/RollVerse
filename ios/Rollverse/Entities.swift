@@ -429,48 +429,39 @@ enum Entities {
         return root
     }
 
-    /// Tunnel floor: the road surface inside + a concrete apron. Roof is separate.
+    /// Tunnel floor: the dark road running through the pipe. Roof is separate.
     static func buildTunnelFloor(_ tn: World.Tunnel) -> SKNode {
         let root = SKNode()
         root.position = CGPoint(x: tn.x + tn.w / 2, y: tn.y + tn.h / 2)
         root.zPosition = -3
         let w = tn.w, h = tn.h
-        root.addChild(Art.fillRoundRect(-w / 2 - 10, -h / 2 - 10, w + 20, h + 20, 26, SKColor(hex: 0x5b5568))) // apron
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 20, SKColor(hex: 0x15101f)))                     // dark road
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, h / 2, SKColor(hex: 0x140f1e)))
         return root
     }
 
-    /// The tunnel roof: a vaulted concrete tube drawn at high zPosition so the skater
-    /// passes UNDER it. Curved-ceiling shading + arch ribs + bright entrance rims read
-    /// it as a real 3D tunnel; kept translucent so you see yourself duck in.
+    /// The tunnel = a concrete PIPE/culvert you skate through: a rounded tube with a
+    /// cylindrical sheen and a bright-rimmed dark opening at each end. Drawn at high
+    /// zPosition (translucent) so you duck through it and the cops lose you.
     static func buildTunnelRoof(_ tn: World.Tunnel) -> SKNode {
         let root = SKNode()
         root.position = CGPoint(x: tn.x + tn.w / 2, y: tn.y + tn.h / 2)
         root.zPosition = 8000
         let w = tn.w, h = tn.h
-        // vaulted ceiling: darker toward the near (bottom) edge, light crown at the top
-        let vault: [UInt32] = [0x6c6684, 0x554f6c, 0x423d58, 0x322e46, 0x272338]
-        let bh = h / CGFloat(vault.count)
-        for (i, c) in vault.enumerated() {
-            root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + CGFloat(i) * bh, w, bh + 1, i == 0 ? 20 : 2,
-                                            SKColor(hex: c, alpha: 0.82)))
+        // pipe body (capsule) — translucent so you see yourself inside
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, h / 2, SKColor(hex: 0x625c74, alpha: 0.72)))
+        // cylindrical sheen along the top + shadow along the bottom
+        root.addChild(Art.fillRoundRect(-w / 2 + 16, -h / 2 + 6, w - 32, h * 0.24, h * 0.12, SKColor(hex: 0x958db4, alpha: 0.55)))
+        root.addChild(Art.fillRoundRect(-w / 2 + 16, h / 2 - h * 0.22, w - 32, h * 0.14, h * 0.07, SKColor(white: 0, alpha: 0.22)))
+        // round openings at each end: bright concrete rim + black hole
+        for sx: CGFloat in [-w / 2, w / 2] {
+            let rim = SKShapeNode(ellipseOf: CGSize(width: 26, height: h + 4))
+            rim.fillColor = SKColor(hex: 0x9c96b0); rim.strokeColor = .clear; rim.position = CGPoint(x: sx, y: 0)
+            let hole = SKShapeNode(ellipseOf: CGSize(width: 16, height: h - 14))
+            hole.fillColor = SKColor(hex: 0x08060f); hole.strokeColor = .clear; hole.position = CGPoint(x: sx, y: 0)
+            root.addChild(rim); root.addChild(hole)
         }
-        // crown highlight (top of the arch catching light)
-        root.addChild(Art.fillRoundRect(-w / 2 + 12, -h / 2 + 6, w - 24, 10, 5, SKColor(white: 1, alpha: 0.16)))
-        // arch ribs across the tube
-        var x = -w / 2 + 46
-        while x < w / 2 - 24 {
-            root.addChild(Art.fillRect(x, -h / 2 + 6, 6, h - 12, SKColor(hex: 0x211d30, alpha: 0.55)))
-            x += 58
-        }
-        // bright concrete entrance rims at each mouth + dark depth just inside
-        for sx: CGFloat in [-w / 2, w / 2 - 9] {
-            root.addChild(Art.fillRoundRect(sx, -h / 2, 9, h, 4, SKColor(hex: 0x8f89a6)))
-        }
-        root.addChild(Art.fillRoundRect(-w / 2 + 9, -h / 2 + 4, 22, h - 8, 6, SKColor(hex: 0x0a0812, alpha: 0.5)))
-        root.addChild(Art.fillRoundRect(w / 2 - 31, -h / 2 + 4, 22, h - 8, 6, SKColor(hex: 0x0a0812, alpha: 0.5)))
-        let tag = Art.label("TUNNEL", size: 20, color: Palette.cyan)
-        tag.position = CGPoint(x: 0, y: -h / 2 + 22)
+        let tag = Art.label("TUNNEL", size: 16, color: Palette.cyan)
+        tag.position = CGPoint(x: 0, y: h / 2 + 16)
         root.addChild(tag)
         return root
     }

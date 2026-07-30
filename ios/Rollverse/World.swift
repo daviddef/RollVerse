@@ -105,13 +105,12 @@ enum World {
         DropIn(x: 2260, y: 900, dir: 0),      // into the bowl
     ]
 
-    // TUNNELS — skate through one while the cops chase you and you lose them.
-    // Wide + tall so you clearly fit through; you duck under the roof and vanish.
+    // TUNNELS — a pipe/culvert you skate THROUGH (along x); do it while the cops
+    // chase you and you lose them. w = length, h = tube diameter.
     struct Tunnel { let x, y, w, h: CGFloat }
     static let tunnels: [Tunnel] = [
-        Tunnel(x: 300,  y: 380,  w: 300, h: 380),     // plaza, right by the start
-        Tunnel(x: 1420, y: 300,  w: 520, h: 360),     // over the road
-        Tunnel(x: 2950, y: 1040, w: 460, h: 360),     // bowl underpass
+        Tunnel(x: 300,  y: 640,  w: 250, h: 132),     // plaza, near the start
+        Tunnel(x: 2500, y: 1150, w: 260, h: 136),     // bowl
     ]
 
     // Crosswalk band (where cars yield to pedestrians).

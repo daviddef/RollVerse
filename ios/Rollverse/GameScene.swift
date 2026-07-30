@@ -392,7 +392,7 @@ final class GameScene: SKScene {
                 z = pipeWallMax * frac * frac
                 if (frac > 0.9 && vy > 150) || (frac < -0.9 && vy < -150) {   // fast up the wall -> air
                     onGround = false; bigAir = true
-                    vz = min(560, abs(vy) + 150); vy = 0                       // pop straight up off the lip
+                    vz = min(230, abs(vy) * 0.4 + 60); vy = 0                  // small pop just above the coping
                     pop("AIR!", Palette.cyan, px, py - z / tilt - 46)
                 }
             } else if let bk = bankAt(px, py) {
