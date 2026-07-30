@@ -328,6 +328,63 @@ enum Entities {
         return root
     }
 
+    /// A small mellow bank — rises toward -y with a shaded slope + coping. For
+    /// learning kick turns and basic transitions.
+    static func buildBank(_ bk: World.Bank) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: bk.x + bk.w / 2, y: bk.y + bk.h / 2)
+        root.zPosition = -455
+        let w = bk.w, h = bk.h
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + 6, w, h, 14, SKColor(white: 0, alpha: 0.2)))   // shadow
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 14, SKColor(hex: 0x33304a)))              // base
+        // slope bands: dark at the base (bottom) -> light toward the top (coping)
+        let band: [UInt32] = [0x3b3757, 0x494470, 0x5a5488, 0x6f68a0]
+        let bh = (h - 10) / CGFloat(band.count)
+        for (i, c) in band.enumerated() {
+            let y = h / 2 - 5 - CGFloat(i + 1) * bh
+            root.addChild(Art.fillRoundRect(-w / 2 + 6, y, w - 12, bh + 1, 4, SKColor(hex: c)))
+        }
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, 5, 2, SKColor(hex: 0xd7d0e6)))                // coping
+        return root
+    }
+
+    /// A flat practice pad: painted flat ground + a carve ring + a label.
+    static func buildPracticePad(_ r: CGRect) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: r.midX, y: r.midY)
+        root.zPosition = -485
+        let w = r.width, h = r.height
+        let pad = Art.fillRoundRect(-w / 2, -h / 2, w, h, 20, SKColor(hex: 0xc6ff42, alpha: 0.10))
+        root.addChild(pad)
+        let border = SKShapeNode(path: Art.roundRectPath(-w / 2, -h / 2, w, h, 20).copy(dashingWithPhase: 0, lengths: [14, 10]))
+        border.strokeColor = SKColor(hex: 0xc6ff42, alpha: 0.5); border.lineWidth = 3; border.fillColor = .clear
+        root.addChild(border)
+        let ring = SKShapeNode(path: CGPath(ellipseIn: CGRect(x: -50, y: -50, width: 100, height: 100), transform: nil)
+            .copy(dashingWithPhase: 0, lengths: [10, 10]))
+        ring.strokeColor = SKColor(white: 1, alpha: 0.3); ring.lineWidth = 2; ring.fillColor = .clear
+        root.addChild(ring)
+        return root
+    }
+
+    static func buildCone() -> SKNode {
+        let root = SKNode()
+        root.addChild({ let s = SKShapeNode(ellipseOf: CGSize(width: 16, height: 7))
+            s.fillColor = SKColor(white: 0, alpha: 0.28); s.strokeColor = .clear; return s }())
+        let tri = CGMutablePath(); tri.move(to: CGPoint(x: -8, y: 0)); tri.addLine(to: CGPoint(x: 8, y: 0))
+        tri.addLine(to: CGPoint(x: 2, y: -26)); tri.addLine(to: CGPoint(x: -2, y: -26)); tri.closeSubpath()
+        let n = SKShapeNode(path: tri); n.fillColor = SKColor(hex: 0xff7a33); n.strokeColor = .clear
+        root.addChild(n)
+        root.addChild(Art.fillRect(-4, -17, 8, 4, SKColor(white: 1, alpha: 0.7)))   // reflective band
+        return root
+    }
+
+    static func buildPuddle() -> SKShapeNode {
+        let p = SKShapeNode(ellipseOf: CGSize(width: 70, height: 34))
+        p.fillColor = SKColor(hex: 0x5aa0c8, alpha: 0.45); p.strokeColor = SKColor(hex: 0x9fd0e6, alpha: 0.4); p.lineWidth = 2
+        p.zPosition = -300; p.alpha = 0        // fades in when it rains
+        return p
+    }
+
     /// A drop-in platform: a raised deck with a coping lip + chevron on the drop side.
     static func buildDropIn(_ d: World.DropIn) -> SKNode {
         let root = SKNode()
@@ -372,34 +429,48 @@ enum Entities {
         return root
     }
 
-    /// Tunnel floor + glowing entrance frame (drawn on the ground). Roof is separate.
+    /// Tunnel floor: the road surface inside + a concrete apron. Roof is separate.
     static func buildTunnelFloor(_ tn: World.Tunnel) -> SKNode {
         let root = SKNode()
         root.position = CGPoint(x: tn.x + tn.w / 2, y: tn.y + tn.h / 2)
         root.zPosition = -3
         let w = tn.w, h = tn.h
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 22, SKColor(hex: 0x140f22)))
-        let frame = SKShapeNode(path: Art.roundRectPath(-w / 2, -h / 2, w, h, 22))
-        frame.strokeColor = SKColor(hex: 0x37d6e6, alpha: 0.8); frame.lineWidth = 5; frame.fillColor = .clear
-        root.addChild(frame)
+        root.addChild(Art.fillRoundRect(-w / 2 - 10, -h / 2 - 10, w + 20, h + 20, 26, SKColor(hex: 0x5b5568))) // apron
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 20, SKColor(hex: 0x15101f)))                     // dark road
         return root
     }
 
-    /// The tunnel roof: high zPosition so the skater passes UNDER it. Translucent so
-    /// you can see yourself duck inside (and the cops lose you).
+    /// The tunnel roof: a vaulted concrete tube drawn at high zPosition so the skater
+    /// passes UNDER it. Curved-ceiling shading + arch ribs + bright entrance rims read
+    /// it as a real 3D tunnel; kept translucent so you see yourself duck in.
     static func buildTunnelRoof(_ tn: World.Tunnel) -> SKNode {
         let root = SKNode()
         root.position = CGPoint(x: tn.x + tn.w / 2, y: tn.y + tn.h / 2)
         root.zPosition = 8000
         let w = tn.w, h = tn.h
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 22, SKColor(hex: 0x120f1e, alpha: 0.6)))
-        var x = -w / 2 + 34
-        while x < w / 2 - 20 {
-            root.addChild(Art.fillRect(x, -h / 2 + 10, 5, h - 20, SKColor(white: 1, alpha: 0.06)))
-            x += 44
+        // vaulted ceiling: darker toward the near (bottom) edge, light crown at the top
+        let vault: [UInt32] = [0x6c6684, 0x554f6c, 0x423d58, 0x322e46, 0x272338]
+        let bh = h / CGFloat(vault.count)
+        for (i, c) in vault.enumerated() {
+            root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + CGFloat(i) * bh, w, bh + 1, i == 0 ? 20 : 2,
+                                            SKColor(hex: c, alpha: 0.82)))
         }
-        let tag = Art.label("TUNNEL", size: 22, color: Palette.cyan)
-        tag.position = CGPoint(x: 0, y: -h / 2 + 24)
+        // crown highlight (top of the arch catching light)
+        root.addChild(Art.fillRoundRect(-w / 2 + 12, -h / 2 + 6, w - 24, 10, 5, SKColor(white: 1, alpha: 0.16)))
+        // arch ribs across the tube
+        var x = -w / 2 + 46
+        while x < w / 2 - 24 {
+            root.addChild(Art.fillRect(x, -h / 2 + 6, 6, h - 12, SKColor(hex: 0x211d30, alpha: 0.55)))
+            x += 58
+        }
+        // bright concrete entrance rims at each mouth + dark depth just inside
+        for sx: CGFloat in [-w / 2, w / 2 - 9] {
+            root.addChild(Art.fillRoundRect(sx, -h / 2, 9, h, 4, SKColor(hex: 0x8f89a6)))
+        }
+        root.addChild(Art.fillRoundRect(-w / 2 + 9, -h / 2 + 4, 22, h - 8, 6, SKColor(hex: 0x0a0812, alpha: 0.5)))
+        root.addChild(Art.fillRoundRect(w / 2 - 31, -h / 2 + 4, 22, h - 8, 6, SKColor(hex: 0x0a0812, alpha: 0.5)))
+        let tag = Art.label("TUNNEL", size: 20, color: Palette.cyan)
+        tag.position = CGPoint(x: 0, y: -h / 2 + 22)
         root.addChild(tag)
         return root
     }

@@ -29,6 +29,26 @@ enum World {
     // Bike pickup (on the beach) — unlocks the BMX.
     static let bikePickup = CGPoint(x: 3950, y: 760)
 
+    // BEGINNER AREA (on the beach): small mellow banks to learn kick turns +
+    // basic transitions, a flat practice pad, and slalom cones for push & turn.
+    struct Bank { let x, y, w, h: CGFloat }   // mellow bank; rises toward -y, base at +y
+    static let banks: [Bank] = [
+        Bank(x: 3660, y: 980,  w: 240, h: 120),
+        Bank(x: 3960, y: 980,  w: 240, h: 120),
+        Bank(x: 3810, y: 1180, w: 260, h: 120),
+    ]
+    static let practicePad = CGRect(x: 3660, y: 380, width: 520, height: 300)
+    static let cones: [CGPoint] = [
+        CGPoint(x: 3760, y: 460), CGPoint(x: 3870, y: 560), CGPoint(x: 3980, y: 460),
+        CGPoint(x: 4090, y: 560), CGPoint(x: 3870, y: 660),
+    ]
+
+    // Puddle spots (fill in when it rains).
+    static let puddles: [CGPoint] = [
+        CGPoint(x: 640, y: 900), CGPoint(x: 980, y: 1150), CGPoint(x: 2700, y: 700),
+        CGPoint(x: 3100, y: 1000), CGPoint(x: 480, y: 500), CGPoint(x: 2450, y: 500),
+    ]
+
     // Grind rails / ledges (street): long thin boxes. Land low + moving => grind.
     // (Funbox / pyramid top ledges are added here too so grinding works on them.)
     struct Rail { let x, y, w, h: CGFloat; let col: SKColor; let pad: Bool; let name: String }

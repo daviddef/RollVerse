@@ -61,6 +61,14 @@ final class GameScene: SKScene {
     private var pickupNode: SKNode?
     private var bikeTaken = false
     private var bikeNode: SKNode?
+
+    // Weather
+    private var raining = false
+    private var weatherTimer: CGFloat = 22
+    private var splashCd: CGFloat = 0
+    private var puddleNodes: [SKShapeNode] = []
+    private let rainNode = SKNode()
+    private let rainTint = SKShapeNode()
     private var coins: [Coin] = []
     private var letters: [Letter] = []
     private var animals: [Animal] = []
@@ -96,6 +104,22 @@ final class GameScene: SKScene {
         return pipeWallMax * frac * frac
     }
 
+    // Small mellow banks (kick-turn practice).
+    private let bankMax: CGFloat = 66
+    private let bankGrav: CGFloat = 640
+    private func bankAt(_ x: CGFloat, _ y: CGFloat) -> World.Bank? {
+        World.banks.first { x > $0.x && x < $0.x + $0.w && y > $0.y && y < $0.y + $0.h }
+    }
+    private func bankProgress(_ bk: World.Bank, _ y: CGFloat) -> CGFloat {
+        max(0, min(1, (bk.y + bk.h - y) / bk.h))       // 0 at base -> 1 at the top
+    }
+    /// The ground height under (x,y): half-pipe wall, bank slope, or flat 0.
+    private func floorAt(_ x: CGFloat, _ y: CGFloat) -> CGFloat {
+        if halfPipeAt(x, y) != nil { return pipeFloor(x, y) }
+        if let bk = bankAt(x, y) { let p = bankProgress(bk, y); return bankMax * p * p }
+        return 0
+    }
+
     // MARK: input buffers (edge-triggered, like jumpBuf/trickBuf/switchBuf)
     private var jumpBuf = false, trickBuf = false, switchBuf = false
 
@@ -128,6 +152,7 @@ final class GameScene: SKScene {
         cameraNode.position = CGPoint(x: px, y: z - tilt * py)
         cameraNode.addChild(hud)
         cameraNode.addChild(controls)
+        buildRain()
 
         buildWorld()
         wireControls()
@@ -146,6 +171,8 @@ final class GameScene: SKScene {
         for py in World.pyramids { worldRoot.addChild(Entities.buildPyramid(py)) }
         for hp in World.halfpipes { worldRoot.addChild(Entities.buildHalfPipe(hp)) }
         for di in World.dropins { worldRoot.addChild(Entities.buildDropIn(di)) }
+        for bk in World.banks { worldRoot.addChild(Entities.buildBank(bk)) }
+        worldRoot.addChild(Entities.buildPracticePad(World.practicePad))
         for tn in World.tunnels {
             worldRoot.addChild(Entities.buildTunnelFloor(tn))
             worldRoot.addChild(Entities.buildTunnelRoof(tn))
@@ -161,6 +188,8 @@ final class GameScene: SKScene {
         for rp in World.ramps { worldRoot.addChild(Art.tag(rp.kind == .quarter ? "QUARTER PIPE" : "KICKER", rp.x, rp.y - rp.h / 2 - 18)) }
         for rl in World.rails where !rl.name.isEmpty { worldRoot.addChild(Art.tag(rl.name, rl.x + rl.w / 2, rl.y - 14)) }
         for di in World.dropins { worldRoot.addChild(Art.tag("DROP IN", di.x, di.y - 54)) }
+        for bk in World.banks { worldRoot.addChild(Art.tag("BANK", bk.x + bk.w / 2, bk.y - 12)) }
+        worldRoot.addChild(Art.tag("PRACTICE · PUSH & TURN", World.practicePad.midX, World.practicePad.minY - 14))
 
         let up = 1 / tilt   // counter-scale to keep upright things full-height
 
@@ -175,6 +204,16 @@ final class GameScene: SKScene {
         let bpk = Entities.buildBikePickup()
         bpk.position = CGPoint(x: World.bikePickup.x, y: World.bikePickup.y); bpk.zPosition = World.bikePickup.y; bpk.yScale = up
         worldRoot.addChild(bpk); bikeNode = bpk
+
+        // slalom cones (push & turn practice) + rain puddles
+        for c in World.cones {
+            let n = Entities.buildCone(); n.position = CGPoint(x: c.x, y: c.y); n.zPosition = c.y; n.yScale = up
+            worldRoot.addChild(n)
+        }
+        for p in World.puddles {
+            let n = Entities.buildPuddle(); n.position = CGPoint(x: p.x, y: p.y)
+            worldRoot.addChild(n); puddleNodes.append(n)
+        }
 
         // boats drifting on the sea
         for _ in 0..<5 {
@@ -307,6 +346,7 @@ final class GameScene: SKScene {
         let target = boostTimer > 0 ? 540 : eff.topSpeed     // boost raises the cap so it holds
         let a = onGround ? eff.accel : eff.accel * 0.5
         let pipe = (onGround && !grinding) ? halfPipeAt(px, py) : nil
+        let bank = (pipe == nil && onGround && !grinding) ? bankAt(px, py) : nil
         if let hp = pipe {
             // HALF PIPE: steer ALONG the pipe (x); a U-transition ACROSS it (y).
             vx += (inp.x * target - vx) * min(1, a * t)
@@ -314,6 +354,14 @@ final class GameScene: SKScene {
             vy += -pipeGravity * frac * t                 // roll back down toward the flat
             vy += inp.y * target * 1.4 * min(1, a * t)    // pump / carve up the wall
             vy *= pow(0.9, t)                             // a little friction
+            if hypot2(vx, vy) > 12 { face = atan2(vy, vx) }
+        } else if let bk = bank {
+            // SMALL BANK: roll up, kick-turn, roll back (mellow, one-sided).
+            vx += (inp.x * target - vx) * min(1, a * t)
+            let p = bankProgress(bk, py)
+            vy += bankGrav * p * t                        // gentle pull back down the slope
+            vy += inp.y * target * min(1, a * t)          // steer up / kick turn
+            vy *= pow(0.92, t)
             if hypot2(vx, vy) > 12 { face = atan2(vy, vx) }
         } else if inp.mag > 0.1 {
             let tvx = inp.x * target * inp.mag, tvy = inp.y * target * inp.mag
@@ -347,6 +395,13 @@ final class GameScene: SKScene {
                     vz = min(560, abs(vy) + 150); vy = 0                       // pop straight up off the lip
                     pop("AIR!", Palette.cyan, px, py - z / tilt - 46)
                 }
+            } else if let bk = bankAt(px, py) {
+                let p = bankProgress(bk, py)
+                z = bankMax * p * p
+                if p > 0.92 && vy < -220 {                                   // crest the bank fast -> small air
+                    onGround = false; vz = min(280, abs(vy) * 0.6); vy = 0
+                    pop("AIR!", Palette.cyan, px, py - z / tilt - 46)
+                }
             } else {
                 z = 0
             }
@@ -359,7 +414,7 @@ final class GameScene: SKScene {
         // gravity / height
         if !onGround {
             vz -= r.gravity * t; z += vz * t; spin += spinRate * t
-            let floor = pipeFloor(px, py)          // wall height if over a half pipe, else 0
+            let floor = floorAt(px, py)            // half-pipe wall / bank slope / flat
             if z <= floor {
                 z = floor; onGround = true; vz = 0; spin = 0; flip = false; spinRate = 0
                 if floor <= 0.5 {                  // landed on flat ground -> end the run
@@ -433,7 +488,7 @@ final class GameScene: SKScene {
             bikeNode?.removeFromParent(); bikeNode = nil
         }
 
-        updatePeds(t); updateCars(t); updateGuard(t); updateAnimals(t); updateBoats(t)
+        updatePeds(t); updateCars(t); updateGuard(t); updateAnimals(t); updateBoats(t); updateWeather(t)
         if guard_ != nil {
             for tn in World.tunnels where px > tn.x && px < tn.x + tn.w && py > tn.y && py < tn.y + tn.h {
                 loseCopsInTunnel(); break
@@ -664,6 +719,63 @@ final class GameScene: SKScene {
             }
             a.x = clampf(a.x + a.vx * t, 20, World.Sea.oceanX0 - 20)
             a.y = clampf(a.y + a.vy * t, 20, World.height - 20)
+        }
+    }
+
+    // MARK: weather (rain, puddles, splashing)
+
+    private func buildRain() {
+        rainTint.path = CGPath(rect: CGRect(x: -2000, y: -2000, width: 4000, height: 4000), transform: nil)
+        rainTint.fillColor = SKColor(hex: 0x0b1a2e, alpha: 0.28); rainTint.strokeColor = .clear
+        rainTint.zPosition = 40_000; rainTint.alpha = 0
+        cameraNode.addChild(rainTint)
+        rainNode.zPosition = 50_000; rainNode.alpha = 0
+        for i in 0..<70 {
+            let drop = SKShapeNode(rectOf: CGSize(width: 2, height: 13), cornerRadius: 1)
+            drop.fillColor = SKColor(hex: 0xbfe0f0, alpha: 0.5); drop.strokeColor = .clear
+            drop.position = CGPoint(x: CGFloat.random(in: -560...560), y: CGFloat.random(in: -440...440))
+            let dur = 0.45 + Double(i % 6) * 0.06
+            drop.run(.repeatForever(.sequence([.moveBy(x: -30, y: -840, duration: dur),
+                                               .moveBy(x: 30, y: 840, duration: 0)])))
+            rainNode.addChild(drop)
+        }
+        cameraNode.addChild(rainNode)
+    }
+
+    private func updateWeather(_ dt: CGFloat) {
+        weatherTimer -= dt
+        if weatherTimer <= 0 {
+            raining.toggle()
+            weatherTimer = raining ? CGFloat.random(in: 12...20) : CGFloat.random(in: 25...45)
+            rainNode.run(.fadeAlpha(to: raining ? 1 : 0, duration: 1.2))
+            rainTint.run(.fadeAlpha(to: raining ? 1 : 0, duration: 1.2))
+            for pn in puddleNodes { pn.run(.fadeAlpha(to: raining ? 1 : 0, duration: 2.0)) }
+            if raining { pop("It's raining!", Palette.cyan, px, py - 70) }
+        }
+        // splash through puddles -> soak nearby pedestrians
+        if raining {
+            if splashCd > 0 { splashCd -= dt }
+            if splashCd <= 0 && onGround && hypot2(vx, vy) > 130 {
+                for p in World.puddles where hypot2(px - p.x, py - p.y) < 42 {
+                    splashCd = 0.4; splash(p.x, p.y)
+                    for pd in peds where !pd.downed && hypot2(pd.x - p.x, pd.y - p.y) < 95 {
+                        pop("SPLASH!", Palette.cyan, pd.x, pd.y - 40); addScore(5)
+                    }
+                    break
+                }
+            }
+        }
+    }
+
+    private func splash(_ x: CGFloat, _ y: CGFloat) {
+        for _ in 0..<10 {
+            let d = SKShapeNode(circleOfRadius: CGFloat.random(in: 2...4))
+            d.fillColor = SKColor(hex: 0x9fd0e6, alpha: 0.85); d.strokeColor = .clear
+            d.position = CGPoint(x: x, y: y); d.zPosition = y + 5
+            worldRoot.addChild(d)
+            let ang = CGFloat.random(in: 0...6.28), dist = CGFloat.random(in: 22...58)
+            d.run(.sequence([.group([.moveBy(x: cos(ang) * dist, y: -sin(ang) * dist, duration: 0.4),
+                                     .fadeOut(withDuration: 0.4)]), .removeFromParent()]))
         }
     }
 
