@@ -11,17 +11,23 @@
 import SpriteKit
 
 enum World {
-    static let width: CGFloat = 3600
+    static let width: CGFloat = 5200
     static let height: CGFloat = 1500
 
     enum Road { static let x0: CGFloat = 1300, x1: CGFloat = 2200 }
+    enum Sea  { static let beachX0: CGFloat = 3600, oceanX0: CGFloat = 4300 }
 
     struct District { let name: String; let x0: CGFloat; let x1: CGFloat }
     static let districts: [District] = [
         District(name: "Street Plaza", x0: 0,    x1: 1300),
         District(name: "The Road",     x0: 1300, x1: 2200),
         District(name: "Bowl Park",    x0: 2200, x1: 3600),
+        District(name: "Beachside",    x0: 3600, x1: 4300),
+        District(name: "The Sea",      x0: 4300, x1: 5200),
     ]
+
+    // Bike pickup (on the beach) — unlocks the BMX.
+    static let bikePickup = CGPoint(x: 3950, y: 760)
 
     // Grind rails / ledges (street): long thin boxes. Land low + moving => grind.
     // (Funbox / pyramid top ledges are added here too so grinding works on them.)
@@ -153,6 +159,16 @@ final class Car {
 }
 
 struct Guard { var x, y: CGFloat }
+
+// Boats drifting on the sea (ambient).
+final class Boat {
+    var x, y, dir, spd: CGFloat
+    let col: SKColor
+    var node: SKNode?
+    init(x: CGFloat, y: CGFloat, dir: CGFloat, spd: CGFloat, col: SKColor) {
+        self.x = x; self.y = y; self.dir = dir; self.spd = spd; self.col = col
+    }
+}
 
 final class Coin {
     let x, y: CGFloat; var taken = false; var node: SKNode?

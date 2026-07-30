@@ -79,8 +79,11 @@ enum Entities {
 
         // District & road floors
         root.addChild(Art.fillRect(0, 0, World.Road.x0, World.height, Palette.plazaFloor))
-        root.addChild(Art.fillRect(World.Road.x1, 0, World.width - World.Road.x1, World.height, Palette.bowlFloor))
+        root.addChild(Art.fillRect(World.Road.x1, 0, World.Sea.beachX0 - World.Road.x1, World.height, Palette.bowlFloor))
         root.addChild(Art.fillRect(World.Road.x0, 0, World.Road.x1 - World.Road.x0, World.height, Palette.roadFloor))
+        // Beach sand
+        root.addChild(Art.fillRect(World.Sea.beachX0, 0, World.Sea.oceanX0 - World.Sea.beachX0, World.height, SKColor(hex: 0xe6cf9c)))
+        root.addChild(Art.fillRect(World.Sea.beachX0, 0, 12, World.height, SKColor(hex: 0xcbb277)))   // curb-ish edge
         // Curbs
         root.addChild(Art.fillRect(World.Road.x0 - 10, 0, 10, World.height, Palette.curb))
         root.addChild(Art.fillRect(World.Road.x1, 0, 10, World.height, Palette.curb))
@@ -103,7 +106,7 @@ enum Entities {
         // Tile grid in the districts
         let grid = CGMutablePath()
         var x: CGFloat = 0
-        while x <= World.width {
+        while x <= World.Sea.beachX0 {
             if x < World.Road.x0 - 10 || x > World.Road.x1 + 10 {
                 grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: World.height))
             }
@@ -112,7 +115,7 @@ enum Entities {
         var y: CGFloat = 0
         while y <= World.height {
             grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: World.Road.x0, y: y))
-            grid.move(to: CGPoint(x: World.Road.x1, y: y)); grid.addLine(to: CGPoint(x: World.width, y: y))
+            grid.move(to: CGPoint(x: World.Road.x1, y: y)); grid.addLine(to: CGPoint(x: World.Sea.beachX0, y: y))
             y += 120
         }
         let gridNode = SKShapeNode(path: grid)
@@ -127,8 +130,82 @@ enum Entities {
         // Big painted district labels
         let plaza = Art.label("PLAZA", size: 120, color: SKColor(white: 1, alpha: 0.06)); plaza.position = CGPoint(x: 650, y: 300)
         let bowl = Art.label("BOWL", size: 120, color: SKColor(white: 1, alpha: 0.06)); bowl.position = CGPoint(x: 2900, y: 300)
-        root.addChild(plaza); root.addChild(bowl)
+        let beach = Art.label("BEACH", size: 100, color: SKColor(hex: 0xffffff, alpha: 0.10)); beach.position = CGPoint(x: 3950, y: 300)
+        root.addChild(plaza); root.addChild(bowl); root.addChild(beach)
 
+        return root
+    }
+
+    /// The sea: deep water, drifting wave crests, and a foam line at the shore.
+    static func buildOcean() -> SKNode {
+        let root = SKNode()
+        root.zPosition = -960
+        let x0 = World.Sea.oceanX0, w = World.width - x0, h = World.height
+        // water bands (lighter near the shore -> deeper out to sea)
+        let bands: [UInt32] = [0x2f89b0, 0x2877a0, 0x216690, 0x1b5680]
+        let bw = w / CGFloat(bands.count)
+        for (i, c) in bands.enumerated() {
+            root.addChild(Art.fillRect(x0 + CGFloat(i) * bw, 0, bw + 1, h, SKColor(hex: c)))
+        }
+        // shoreline foam
+        let foam = Art.fillRect(x0 - 6, 0, 20, h, SKColor(hex: 0xeaf6ff, alpha: 0.7))
+        foam.run(.repeatForever(.sequence([.fadeAlpha(to: 0.35, duration: 0.9), .fadeAlpha(to: 0.8, duration: 0.9)])))
+        root.addChild(foam)
+        // drifting wave crests
+        for i in 0..<26 {
+            let wy = CGFloat((i * 137) % Int(h))
+            let wx = x0 + 30 + CGFloat((i * 311) % Int(w - 60))
+            let crest = Art.fillRoundRect(-26, -2, 52, 4, 2, SKColor(white: 1, alpha: 0.28))
+            crest.position = CGPoint(x: wx, y: wy)
+            let dur = 3.0 + Double(i % 5) * 0.6
+            crest.run(.repeatForever(.sequence([
+                .group([.moveBy(x: -34, y: 0, duration: dur), .fadeAlpha(to: 0.05, duration: dur)]),
+                .group([.moveBy(x: 34, y: 0, duration: 0), .fadeAlpha(to: 0.28, duration: 0.01)]),
+            ])))
+            root.addChild(crest)
+        }
+        let sea = Art.label("SEA", size: 110, color: SKColor(hex: 0xffffff, alpha: 0.08)); sea.position = CGPoint(x: 4750, y: 300)
+        root.addChild(sea)
+        return root
+    }
+
+    /// A little boat drifting on the sea.
+    static func buildBoat(_ b: Boat) -> SKNode {
+        let root = SKNode()
+        root.addChild({ let s = SKShapeNode(ellipseOf: CGSize(width: 60, height: 20))
+            s.fillColor = SKColor(white: 0, alpha: 0.18); s.strokeColor = .clear; s.position = CGPoint(x: 0, y: 10); return s }())
+        // hull
+        let hull = CGMutablePath()
+        hull.move(to: CGPoint(x: -34, y: -6)); hull.addLine(to: CGPoint(x: 34, y: -6))
+        hull.addLine(to: CGPoint(x: 24, y: 14)); hull.addLine(to: CGPoint(x: -24, y: 14)); hull.closeSubpath()
+        let hn = SKShapeNode(path: hull); hn.fillColor = b.col; hn.strokeColor = SKColor(white: 0, alpha: 0.2); hn.lineWidth = 2
+        root.addChild(hn)
+        // cabin + mast
+        root.addChild(Art.fillRoundRect(-12, -20, 24, 16, 4, SKColor(hex: 0xeaf6ff)))
+        root.addChild(Art.line(0, -20, 0, -44, 3, SKColor(hex: 0x8a7f6a)))
+        let sail = CGMutablePath(); sail.move(to: CGPoint(x: 2, y: -44)); sail.addLine(to: CGPoint(x: 22, y: -14)); sail.addLine(to: CGPoint(x: 2, y: -14)); sail.closeSubpath()
+        let sn = SKShapeNode(path: sail); sn.fillColor = SKColor(hex: 0xffce4a); sn.strokeColor = .clear
+        root.addChild(sn)
+        // gentle bob
+        root.run(.repeatForever(.sequence([.moveBy(x: 0, y: -3, duration: 1.1), .moveBy(x: 0, y: 3, duration: 1.1)])))
+        return root
+    }
+
+    static func buildBikePickup() -> SKNode {
+        let root = SKNode()
+        root.addChild({ let s = SKShapeNode(ellipseOf: CGSize(width: 40, height: 16))
+            s.fillColor = SKColor(white: 0, alpha: 0.28); s.strokeColor = .clear; return s }())
+        let icon = SKNode(); icon.position = CGPoint(x: 0, y: -20)
+        let d = SKColor(hex: 0xd23b3b)
+        icon.addChild(Art.circle(-12, 8, 8, SKColor(hex: 0x2a2436))); icon.addChild(Art.circle(-12, 8, 3, .white))
+        icon.addChild(Art.circle(12, 8, 8, SKColor(hex: 0x2a2436))); icon.addChild(Art.circle(12, 8, 3, .white))
+        icon.addChild(Art.line(-12, 8, 2, 2, 3, d)); icon.addChild(Art.line(2, 2, 12, 8, 3, d))
+        icon.addChild(Art.line(2, 2, 0, -8, 3, d)); icon.addChild(Art.line(10, 8, 10, -4, 3, d))
+        icon.addChild(Art.line(5, -4, 15, -4, 3, d))
+        root.addChild(icon)
+        let tag = Art.label("▲ bike", size: 13, color: Palette.volt); tag.position = CGPoint(x: 0, y: -42)
+        root.addChild(tag)
+        icon.run(.repeatForever(.sequence([.moveBy(x: 0, y: -6, duration: 0.5), .moveBy(x: 0, y: 6, duration: 0.5)])))
         return root
     }
 
@@ -475,21 +552,60 @@ enum Entities {
         }
 
         let rig = SKNode()
-        if ride.anchor == .feet {
+        switch ride.kind {
+        case .skateboard:
             if !airborne && !moving {
                 stoppedSkater(into: rig, ride: ride, outfit: outfit)
             } else {
                 boardUnderFeet(into: rig, ride: ride)
                 skatingRider(into: rig, ride: ride, pushing: moving && !airborne, outfit: outfit)
             }
-            if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }
-        } else {
+        case .scooter:
             scooterUnderFeet(into: rig, ride: ride)
             scooterRider(into: rig, ride: ride, pushing: moving && !airborne, outfit: outfit)
-            if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }
+        case .bike:
+            bikeRig(into: rig, ride: ride, outfit: outfit)
+        case .surf:
+            surfRig(into: rig, ride: ride, outfit: outfit)
         }
+        if !airborne { rig.xScale = cos(face) < 0 ? -1 : 1 }   // face the way you roll
         spinner.addChild(rig)
         return spinner
+    }
+
+    /// Side-view BMX bike: two wheels, a frame, bars and seat, rider on the pedals.
+    private static func bikeRig(into rig: SKNode, ride: Rideable, outfit: Outfit) {
+        let d = ride.deck, hub = SKColor(hex: 0x9a94ad)
+        rig.addChild(Art.circle(-15, 16, 9, ride.wheels)); rig.addChild(Art.circle(-15, 16, 3, hub))
+        rig.addChild(Art.circle(15, 16, 9, ride.wheels));  rig.addChild(Art.circle(15, 16, 3, hub))
+        rig.addChild(Art.line(-15, 16, 0, 8, 4, d))     // chainstay
+        rig.addChild(Art.line(0, 8, -3, -8, 4, d))      // seat tube
+        rig.addChild(Art.line(0, 8, 13, -6, 4, d))      // down tube
+        rig.addChild(Art.line(-3, -8, 13, -6, 4, d))    // top tube
+        rig.addChild(Art.line(15, 16, 13, -8, 4, d))    // fork
+        rig.addChild(Art.line(13, -8, 13, -17, 4, d))   // stem
+        rig.addChild(Art.line(7, -17, 19, -17, 4, d))   // handlebar
+        rig.addChild(Art.fillRoundRect(-8, -11, 11, 4, 2, SKColor(hex: 0x1c1830)))  // seat
+        let legC = SKColor(hex: outfit.legs), armC = SKColor(hex: outfit.body)
+        rig.addChild(Art.line(-1, -16, -3, 4, 5, legC))   // legs on the pedals
+        rig.addChild(Art.line(4, -16, 6, 4, 5, legC))
+        torsoHead(into: rig, outfit: outfit)
+        rig.addChild(Art.line(4, -33, 14, -17, 5, armC))  // arms to the bars
+        rig.addChild(Art.line(1, -30, 13, -18, 5, armC))
+    }
+
+    /// Rider on a surfboard: a long board with a crouched, arms-out surf stance.
+    private static func surfRig(into rig: SKNode, ride: Rideable, outfit: Outfit) {
+        let board = SKShapeNode(ellipseOf: CGSize(width: 56, height: 12))
+        board.fillColor = ride.deck; board.strokeColor = .clear; board.position = CGPoint(x: 0, y: 12)
+        rig.addChild(board)
+        rig.addChild(Art.fillRoundRect(-3, 8, 6, 8, 2, SKColor(hex: 0x37d6e6)))   // stripe/logo
+        let legC = SKColor(hex: outfit.legs), armC = SKColor(hex: outfit.body)
+        rig.addChild(Art.line(-8, -13, -10, 6, 5, legC))   // feet planted apart, knees bent
+        rig.addChild(Art.line(9, -13, 11, 6, 5, legC))
+        torsoHead(into: rig, outfit: outfit)
+        rig.addChild(Art.line(-9, -32, -19, -27, 5, armC)) // arms out wide for balance
+        rig.addChild(Art.line(9, -32, 19, -35, 5, armC))
     }
 
     /// Board lying flat under the feet (side profile), fixed under the rider.

@@ -21,11 +21,12 @@ enum Trick {
         return v.dy > 0 ? .up : .down
     }
 
-    static func pick(feet: Bool, dir: Dir, bigAir: Bool) -> Def {
+    static func pick(kind: Rideable.Kind, dir: Dir, bigAir: Bool) -> Def {
         if bigAir && dir == .up {
             return Def(name: "Backflip", spinRate: 22, flip: false, score: 130)
         }
-        if feet {
+        switch kind {
+        case .skateboard:
             switch dir {
             case .down:    return Def(name: "Kickflip", spinRate: 9,  flip: true,  score: 55)
             case .up:      return Def(name: "Heelflip", spinRate: 9,  flip: true,  score: 60)
@@ -33,13 +34,29 @@ enum Trick {
             case .right:   return Def(name: "360 Flip", spinRate: 16, flip: true,  score: 90)
             case .neutral: return Def(name: "Ollie",    spinRate: 3,  flip: false, score: 25)
             }
-        } else {
+        case .scooter:
             switch dir {
             case .down:    return Def(name: "Tailwhip",  spinRate: 12, flip: false, score: 65)
             case .up:      return Def(name: "Bar Spin",  spinRate: 14, flip: false, score: 55)
             case .left:    return Def(name: "X-Up",      spinRate: 8,  flip: false, score: 45)
             case .right:   return Def(name: "360 Whip",  spinRate: 16, flip: false, score: 95)
             case .neutral: return Def(name: "Bunny Hop", spinRate: 3,  flip: false, score: 25)
+            }
+        case .bike:
+            switch dir {
+            case .down:    return Def(name: "Tailwhip",  spinRate: 12, flip: false, score: 70)
+            case .up:      return Def(name: "Bar Spin",  spinRate: 14, flip: false, score: 60)
+            case .left:    return Def(name: "X-Up",      spinRate: 8,  flip: false, score: 50)
+            case .right:   return Def(name: "360",       spinRate: 16, flip: false, score: 100)
+            case .neutral: return Def(name: "Bunny Hop", spinRate: 3,  flip: false, score: 25)
+            }
+        case .surf:
+            switch dir {
+            case .down:    return Def(name: "Cutback",     spinRate: 10, flip: false, score: 60)
+            case .up:      return Def(name: "Floater",     spinRate: 8,  flip: false, score: 55)
+            case .left:    return Def(name: "Aerial",      spinRate: 14, flip: false, score: 80)
+            case .right:   return Def(name: "360 Air",     spinRate: 16, flip: false, score: 95)
+            case .neutral: return Def(name: "Bottom Turn", spinRate: 3,  flip: false, score: 25)
             }
         }
     }

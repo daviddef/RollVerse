@@ -103,14 +103,17 @@ final class HUD: SKNode {
         }
         district(0, World.Road.x0, Palette.plazaFloor)
         district(World.Road.x0, World.Road.x1, Palette.roadFloor)
-        district(World.Road.x1, World.width, Palette.bowlFloor)
+        district(World.Road.x1, World.Sea.beachX0, Palette.bowlFloor)
+        district(World.Sea.beachX0, World.Sea.oceanX0, SKColor(hex: 0xe6cf9c))
+        district(World.Sea.oceanX0, World.width, SKColor(hex: 0x2877a0))
 
         func mark(_ wx: CGFloat, _ wy: CGFloat, _ col: SKColor, _ r: CGFloat) {
             let d = SKShapeNode(circleOfRadius: r); d.fillColor = col; d.strokeColor = .clear
             d.position = mapPoint(wx, wy); miniMap.addChild(d)
         }
         for tn in World.tunnels { mark(tn.x + tn.w / 2, tn.y + tn.h / 2, Palette.cyan, 2.5) }
-        mark(3000, 900, Palette.volt, 3)   // scooter pickup
+        mark(3000, 900, Palette.volt, 3)                                  // scooter pickup
+        mark(World.bikePickup.x, World.bikePickup.y, Palette.coral, 3)    // bike pickup
 
         func mapLabel(_ text: String, _ wx: CGFloat) {
             let l = Art0.label(text, size: 8, color: SKColor(white: 1, alpha: 0.6))
@@ -118,7 +121,9 @@ final class HUD: SKNode {
         }
         mapLabel("PLAZA", World.Road.x0 / 2)
         mapLabel("RD", (World.Road.x0 + World.Road.x1) / 2)
-        mapLabel("BOWL", (World.Road.x1 + World.width) / 2)
+        mapLabel("BOWL", (World.Road.x1 + World.Sea.beachX0) / 2)
+        mapLabel("BCH", (World.Sea.beachX0 + World.Sea.oceanX0) / 2)
+        mapLabel("SEA", (World.Sea.oceanX0 + World.width) / 2)
 
         mapDot.fillColor = Palette.coral; mapDot.strokeColor = .white; mapDot.lineWidth = 1
         mapDot.zPosition = 5

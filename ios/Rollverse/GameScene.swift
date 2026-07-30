@@ -32,6 +32,7 @@ final class GameScene: SKScene {
     private var onGround = true
     private var face: CGFloat = 0
     private var rideKey = "skateboard"
+    private var landRide = "skateboard"   // current land ride (surf is auto on water)
     private var spin: CGFloat = 0, spinRate: CGFloat = 0
     private var flip = false
     private var grinding = false
@@ -48,14 +49,18 @@ final class GameScene: SKScene {
     private var jail = false
     private var jailTimer: CGFloat = 0
     private var unlockedScooter = false
+    private var unlockedBike = false
 
     // MARK: world entities
     private var peds: [Ped] = []
     private var cars: [Car] = []
+    private var boats: [Boat] = []
     private var guard_: Guard?
     private var guardNode = Entities.buildGuard()
     private var pickupTaken = false
     private var pickupNode: SKNode?
+    private var bikeTaken = false
+    private var bikeNode: SKNode?
     private var coins: [Coin] = []
     private var letters: [Letter] = []
     private var animals: [Animal] = []
@@ -121,6 +126,7 @@ final class GameScene: SKScene {
 
     private func buildWorld() {
         worldRoot.addChild(Entities.buildGround())
+        worldRoot.addChild(Entities.buildOcean())
         for z in World.zones { worldRoot.addChild(Entities.buildZone(z)) }
         for bo in World.boosters { worldRoot.addChild(Entities.buildBooster(bo)) }
         for fb in World.funboxes { worldRoot.addChild(Entities.buildFunbox(fb)) }
@@ -151,6 +157,21 @@ final class GameScene: SKScene {
         worldRoot.addChild(pk); pickupNode = pk
 
         guardNode.yScale = up
+
+        // bike pickup on the beach
+        let bpk = Entities.buildBikePickup()
+        bpk.position = CGPoint(x: World.bikePickup.x, y: World.bikePickup.y); bpk.zPosition = World.bikePickup.y; bpk.yScale = up
+        worldRoot.addChild(bpk); bikeNode = bpk
+
+        // boats drifting on the sea
+        for _ in 0..<5 {
+            let bx = World.Sea.oceanX0 + 90 + CGFloat.random(in: 0...(World.width - World.Sea.oceanX0 - 180))
+            let bt = Boat(x: bx, y: CGFloat.random(in: 120...(World.height - 120)),
+                          dir: Bool.random() ? 1 : -1, spd: 18 + CGFloat.random(in: 0...24),
+                          col: SKColor.hsl(CGFloat.random(in: 0...360), 0.5, 0.55))
+            let n = Entities.buildBoat(bt); n.yScale = up; worldRoot.addChild(n); bt.node = n
+            boats.append(bt)
+        }
 
         // pedestrians
         for _ in 0..<22 {
@@ -256,6 +277,11 @@ final class GameScene: SKScene {
             if bailTimer <= 0 { endBail() }
             return
         }
+
+        // surfboard on the sea, your land ride on land
+        let inWater = px > World.Sea.oceanX0
+        let wantRide = inWater ? "surf" : landRide
+        if wantRide != rideKey { rideKey = wantRide; garage?.currentRide = rideKey; hud.setRide(ride().label) }
 
         if switchBuf { doSwitch(); switchBuf = false }
         let r = ride()
@@ -364,7 +390,16 @@ final class GameScene: SKScene {
             pickupNode?.removeFromParent(); pickupNode = nil
         }
 
-        updatePeds(t); updateCars(t); updateGuard(t); updateAnimals(t)
+        // bike pickup (beach)
+        if !bikeTaken, hypot2(px - World.bikePickup.x, py - World.bikePickup.y) < 50 {
+            bikeTaken = true; unlockedBike = true
+            controls.showSwitch(true)
+            pop("BMX UNLOCKED! Tap RIDE", Palette.volt, World.bikePickup.x, World.bikePickup.y - 30)
+            addScore(80)
+            bikeNode?.removeFromParent(); bikeNode = nil
+        }
+
+        updatePeds(t); updateCars(t); updateGuard(t); updateAnimals(t); updateBoats(t)
         if guard_ != nil {
             for tn in World.tunnels where px > tn.x && px < tn.x + tn.w && py > tn.y && py < tn.y + tn.h {
                 loseCopsInTunnel(); break
@@ -389,18 +424,25 @@ final class GameScene: SKScene {
     // MARK: rideable switch
 
     private func doSwitch() {
-        guard unlockedScooter else { return }
-        rideKey = rideKey == "skateboard" ? "scooter" : "skateboard"
-        garage?.currentRide = rideKey
-        hud.setRide(ride().label)
-        pop("Now riding: \(ride().label)", ride().deck, px, py - 60)
+        var options = ["skateboard"]
+        if unlockedScooter { options.append("scooter") }
+        if unlockedBike { options.append("bike") }
+        guard options.count > 1 else { return }
+        let i = options.firstIndex(of: landRide) ?? 0
+        landRide = options[(i + 1) % options.count]
+        if px <= World.Sea.oceanX0 {          // apply now if on land (else surf stays)
+            rideKey = landRide
+            garage?.currentRide = rideKey
+            hud.setRide(ride().label)
+            pop("Now riding: \(ride().label)", ride().deck, px, py - 60)
+        }
     }
 
     // MARK: tricks + scoring (shared engine; verbs come from the rideable)
 
     private func doTrick() {
         let r = ride()
-        let def = Trick.pick(feet: r.anchor == .feet, dir: Trick.dir(controls.stickVec), bigAir: bigAir)
+        let def = Trick.pick(kind: r.kind, dir: Trick.dir(controls.stickVec), bigAir: bigAir)
         trickCount += 1; combo += 1
         spinRate = (Bool.random() ? 1 : -1) * def.spinRate
         flip = def.flip && r.anchor == .feet
@@ -539,7 +581,7 @@ final class GameScene: SKScene {
             }
             pd.timer -= t
             if pd.timer <= 0 {
-                pd.tx = 80 + CGFloat.random(in: 0...(World.width - 160))
+                pd.tx = 80 + CGFloat.random(in: 0...(World.Sea.oceanX0 - 160))   // stay off the water
                 pd.ty = 80 + CGFloat.random(in: 0...(World.height - 160))
                 pd.timer = 2 + CGFloat.random(in: 0...3)
             }
@@ -549,7 +591,7 @@ final class GameScene: SKScene {
                 let dx = pd.tx - pd.x, dy = pd.ty - pd.y, d = max(hypot2(dx, dy), 1)
                 pd.x += dx / d * 30 * t; pd.y += dy / d * 30 * t
             }
-            pd.x = clampf(pd.x, 20, World.width - 20); pd.y = clampf(pd.y, 20, World.height - 20)
+            pd.x = clampf(pd.x, 20, World.Sea.oceanX0 - 20); pd.y = clampf(pd.y, 20, World.height - 20)
 
             let ddx = px - pd.x, ddy = py - pd.y, dd = hypot2(ddx, ddy)
             if dd < 32 {
@@ -579,15 +621,26 @@ final class GameScene: SKScene {
             } else {
                 a.timer -= t
                 if a.timer <= 0 {
-                    a.tx = 80 + CGFloat.random(in: 0...(World.width - 160))
+                    a.tx = 80 + CGFloat.random(in: 0...(World.Sea.oceanX0 - 160))
                     a.ty = 80 + CGFloat.random(in: 0...(World.height - 160))
                     a.timer = 2 + CGFloat.random(in: 0...4)
                 }
                 let dx = a.tx - a.x, dy = a.ty - a.y, d = max(hypot2(dx, dy), 1)
                 a.vx = dx / d * 48; a.vy = dy / d * 48
             }
-            a.x = clampf(a.x + a.vx * t, 20, World.width - 20)
+            a.x = clampf(a.x + a.vx * t, 20, World.Sea.oceanX0 - 20)
             a.y = clampf(a.y + a.vy * t, 20, World.height - 20)
+        }
+    }
+
+    // MARK: boats (ambient, drift on the sea)
+
+    private func updateBoats(_ t: CGFloat) {
+        for b in boats {
+            b.y += b.dir * b.spd * t
+            if b.y > World.height + 60 { b.y = -60 }
+            if b.y < -60 { b.y = World.height + 60 }
+            b.x = clampf(b.x + sin(b.y * 0.01) * 8 * t, World.Sea.oceanX0 + 40, World.width - 40)
         }
     }
 
@@ -791,6 +844,10 @@ final class GameScene: SKScene {
             a.node?.zPosition = a.y
             if abs(a.vx) > 2 { a.node?.xScale = a.vx < 0 ? -1 : 1 }
         }
+        for b in boats {
+            b.node?.position = CGPoint(x: b.x, y: b.y)
+            b.node?.zPosition = b.y
+        }
         if let g = guard_ {
             guardNode.position = CGPoint(x: g.x, y: g.y); guardNode.zPosition = g.y
         }
@@ -821,7 +878,7 @@ final class GameScene: SKScene {
         playerRig.removeFromParent()
         let movingNow = onGround && hypot2(vx, vy) > 28
         var riggedRide = ride()
-        if riggedRide.anchor == .feet {     // board skins recolour the deck
+        if riggedRide.kind == .skateboard {     // board skins recolour the deck
             riggedRide = riggedRide.withDeck(SKColor(hex: Skins.skin(garage?.equippedSkin ?? "classic").hex))
         }
         let outfit = Outfits.outfit(garage?.equippedOutfit ?? "classic")
