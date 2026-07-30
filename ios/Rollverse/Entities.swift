@@ -245,6 +245,27 @@ enum Entities {
         return root
     }
 
+    /// A drop-in platform: a raised deck with a coping lip + chevron on the drop side.
+    static func buildDropIn(_ d: World.DropIn) -> SKNode {
+        let root = SKNode()
+        root.position = CGPoint(x: d.x, y: d.y)
+        root.zRotation = d.dir
+        root.zPosition = -460
+        root.addChild(Art.fillRoundRect(-52, -42 + 8, 104, 84, 16, SKColor(white: 0, alpha: 0.22)))   // shadow
+        root.addChild(Art.fillRoundRect(-52, -42, 104, 84, 16, SKColor(hex: 0x3a3550)))                // platform
+        root.addChild(Art.fillRoundRect(-44, -34, 88, 68, 12, SKColor(hex: 0x565073)))                 // top face
+        root.addChild(Art.fillRoundRect(44, -42, 8, 84, 4, Palette.gold))                              // coping (drop side)
+        for i in -1...1 {                                                                              // chevrons -> drop dir
+            let p = CGMutablePath()
+            p.move(to: CGPoint(x: 10 + CGFloat(i) * 0, y: 0))
+            let cx = 8 + CGFloat(i) * 16
+            p.move(to: CGPoint(x: cx - 8, y: -14)); p.addLine(to: CGPoint(x: cx + 6, y: 0)); p.addLine(to: CGPoint(x: cx - 8, y: 14))
+            let n = SKShapeNode(path: p); n.strokeColor = SKColor(white: 1, alpha: 0.5); n.lineWidth = 4; n.lineCap = .round; n.fillColor = .clear
+            root.addChild(n)
+        }
+        return root
+    }
+
     /// A wandering dog or cat that scurries away from the skater.
     static func buildAnimal(_ a: Animal) -> SKNode {
         let root = SKNode()

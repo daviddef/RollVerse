@@ -126,6 +126,7 @@ final class GameScene: SKScene {
         for fb in World.funboxes { worldRoot.addChild(Entities.buildFunbox(fb)) }
         for py in World.pyramids { worldRoot.addChild(Entities.buildPyramid(py)) }
         for hp in World.halfpipes { worldRoot.addChild(Entities.buildHalfPipe(hp)) }
+        for di in World.dropins { worldRoot.addChild(Entities.buildDropIn(di)) }
         for tn in World.tunnels {
             worldRoot.addChild(Entities.buildTunnelFloor(tn))
             worldRoot.addChild(Entities.buildTunnelRoof(tn))
@@ -140,6 +141,7 @@ final class GameScene: SKScene {
         for hp in World.halfpipes { worldRoot.addChild(Art.tag("HALF PIPE", hp.x + hp.w / 2, hp.y - 16)) }
         for rp in World.ramps { worldRoot.addChild(Art.tag(rp.kind == .quarter ? "QUARTER PIPE" : "KICKER", rp.x, rp.y - rp.h / 2 - 18)) }
         for rl in World.rails where !rl.name.isEmpty { worldRoot.addChild(Art.tag(rl.name, rl.x + rl.w / 2, rl.y - 14)) }
+        for di in World.dropins { worldRoot.addChild(Art.tag("DROP IN", di.x, di.y - 54)) }
 
         let up = 1 / tilt   // counter-scale to keep upright things full-height
 
@@ -311,6 +313,16 @@ final class GameScene: SKScene {
                 vx = cos(bo.dir) * boost; vy = sin(bo.dir) * boost
                 face = bo.dir; boostCd = 0.6; boostTimer = 1.0   // launch fast + hold the speed
                 pop("BOOST!", Palette.volt, px, py - 40)
+                break
+            }
+        }
+
+        // drop-ins -> roll off with speed (works even from a standstill)
+        if onGround && !grinding && boostCd <= 0 {
+            for di in World.dropins where abs(px - di.x) < 54 && abs(py - di.y) < 50 {
+                vx = cos(di.dir) * 520; vy = sin(di.dir) * 520
+                vz = eff.jump * 0.5; onGround = false; face = di.dir; boostCd = 0.7
+                pop("DROP IN!", Palette.gold, px, py - 40)
                 break
             }
         }
@@ -820,6 +832,8 @@ final class GameScene: SKScene {
 
         // subtle sky parallax -> depth behind the world (stays within the oversized sky)
         sky?.position = CGPoint(x: -cameraNode.position.x * 0.012, y: -cameraNode.position.y * 0.012)
+
+        hud.setMapPlayer(px, py)
     }
 
     // MARK: touch handling (forwarded to Controls; intro tap-to-start)

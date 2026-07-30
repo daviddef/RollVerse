@@ -40,6 +40,15 @@ final class HUD: SKNode {
     // Intro overlay
     let introNode = SKNode()
 
+    // Mini-map
+    private let miniMap = SKNode()
+    private let mapDot = SKShapeNode(circleOfRadius: 4)
+    private let mapW: CGFloat = 172
+    private var mapH: CGFloat { mapW * World.height / World.width }
+    private func mapPoint(_ wx: CGFloat, _ wy: CGFloat) -> CGPoint {
+        CGPoint(x: -mapW / 2 + wx / World.width * mapW, y: mapH / 2 - wy / World.height * mapH)
+    }
+
     override init() {
         super.init()
         zPosition = 100_000
@@ -57,6 +66,9 @@ final class HUD: SKNode {
             skateLabels.append(l); skateNode.addChild(l)
         }
         addChild(skateNode)
+
+        buildMiniMap()
+        addChild(miniMap)
 
         heatBarBG.fillColor = SKColor(white: 1, alpha: 0.15); heatBarBG.strokeColor = .clear
         heatBarFill.fillColor = Palette.coral; heatBarFill.strokeColor = .clear
@@ -76,6 +88,44 @@ final class HUD: SKNode {
         buildJail()
         buildIntro()
     }
+
+    private func buildMiniMap() {
+        let w = mapW, h = mapH
+        let bg = SKShapeNode(rectOf: CGSize(width: w + 8, height: h + 8), cornerRadius: 8)
+        bg.fillColor = SKColor(hex: 0x0f0d17, alpha: 0.8); bg.strokeColor = SKColor(white: 1, alpha: 0.15); bg.lineWidth = 1
+        miniMap.addChild(bg)
+
+        func district(_ x0: CGFloat, _ x1: CGFloat, _ col: SKColor) {
+            let rx0 = -w / 2 + x0 / World.width * w
+            let r = SKShapeNode(rect: CGRect(x: rx0, y: -h / 2, width: (x1 - x0) / World.width * w, height: h))
+            r.fillColor = col.withAlphaComponent(0.85); r.strokeColor = SKColor(white: 0, alpha: 0.25); r.lineWidth = 1
+            miniMap.addChild(r)
+        }
+        district(0, World.Road.x0, Palette.plazaFloor)
+        district(World.Road.x0, World.Road.x1, Palette.roadFloor)
+        district(World.Road.x1, World.width, Palette.bowlFloor)
+
+        func mark(_ wx: CGFloat, _ wy: CGFloat, _ col: SKColor, _ r: CGFloat) {
+            let d = SKShapeNode(circleOfRadius: r); d.fillColor = col; d.strokeColor = .clear
+            d.position = mapPoint(wx, wy); miniMap.addChild(d)
+        }
+        for tn in World.tunnels { mark(tn.x + tn.w / 2, tn.y + tn.h / 2, Palette.cyan, 2.5) }
+        mark(3000, 900, Palette.volt, 3)   // scooter pickup
+
+        func mapLabel(_ text: String, _ wx: CGFloat) {
+            let l = Art0.label(text, size: 8, color: SKColor(white: 1, alpha: 0.6))
+            l.position = CGPoint(x: -w / 2 + wx / World.width * w, y: h / 2 - 7); miniMap.addChild(l)
+        }
+        mapLabel("PLAZA", World.Road.x0 / 2)
+        mapLabel("RD", (World.Road.x0 + World.Road.x1) / 2)
+        mapLabel("BOWL", (World.Road.x1 + World.width) / 2)
+
+        mapDot.fillColor = Palette.coral; mapDot.strokeColor = .white; mapDot.lineWidth = 1
+        mapDot.zPosition = 5
+        miniMap.addChild(mapDot)
+    }
+
+    func setMapPlayer(_ wx: CGFloat, _ wy: CGFloat) { mapDot.position = mapPoint(wx, wy) }
 
     // MARK: layout
 
@@ -98,7 +148,8 @@ final class HUD: SKNode {
         heatBarBG.position = CGPoint(x: 0, y: 0)
         layoutHeatFill()
 
-        bannerBG.position = CGPoint(x: 0, y: top - 60)
+        miniMap.position = CGPoint(x: 0, y: top - mapH / 2 - 6)
+        bannerBG.position = CGPoint(x: 0, y: top - mapH - 44)
 
         switchHint.position = CGPoint(x: s.width / 2 - pad - switchHint.halfWidth, y: top - 16)
 

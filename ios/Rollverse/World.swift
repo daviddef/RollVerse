@@ -71,6 +71,14 @@ enum World {
         HalfPipe(x: 2300, y: 1120, w: 480, h: 240),   // lower bowl
     ]
 
+    // DROP-INS — a raised platform; roll off the lip to drop in with speed (works
+    // even from a standstill). `dir` is the direction you drop.
+    struct DropIn { let x, y, dir: CGFloat }
+    static let dropins: [DropIn] = [
+        DropIn(x: 700,  y: 560, dir: 0),      // plaza -> toward the half pipe
+        DropIn(x: 2260, y: 900, dir: 0),      // into the bowl
+    ]
+
     // TUNNELS — skate through one while the cops chase you and you lose them.
     // Wide + tall so you clearly fit through; you duck under the roof and vanish.
     struct Tunnel { let x, y, w, h: CGFloat }
