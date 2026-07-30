@@ -16,6 +16,7 @@ final class Controls: SKNode {
     var onSwitch: () -> Void = {}
     var onGarage: () -> Void = {}
     var onTricks: () -> Void = {}
+    var onPreview3D: () -> Void = {}
 
     private let maxTravel: CGFloat = 55
     private var size: CGSize = .zero
@@ -33,6 +34,7 @@ final class Controls: SKNode {
     private let switchBtn = ButtonNode(title: "RIDE", tint: Palette.volt, radius: 34)
     private let garageBtn = ButtonNode(title: "GEAR", tint: Palette.violet, radius: 28)
     private let tricksBtn = ButtonNode(title: "?", tint: Palette.cyan, radius: 24)
+    private let preview3DBtn = ButtonNode(title: "3D", tint: Palette.gold, radius: 24)
 
     override init() {
         super.init()
@@ -52,6 +54,7 @@ final class Controls: SKNode {
         addChild(switchBtn)
         addChild(garageBtn)
         addChild(tricksBtn)
+        addChild(preview3DBtn)
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -64,6 +67,7 @@ final class Controls: SKNode {
         switchBtn.position = CGPoint(x: s.width / 2 - 158, y: -s.height / 2 + 66)
         garageBtn.position = CGPoint(x: s.width / 2 - 46, y: s.height / 2 - 46)
         tricksBtn.position = CGPoint(x: s.width / 2 - 112, y: s.height / 2 - 46)
+        preview3DBtn.position = CGPoint(x: s.width / 2 - 172, y: s.height / 2 - 46)
     }
 
     func showSwitch(_ show: Bool) { switchBtn.isHidden = !show }
@@ -73,6 +77,7 @@ final class Controls: SKNode {
     func touchDown(_ touch: UITouch, at loc: CGPoint) {
         // Right side = buttons; left side = (floating) joystick.
         if loc.x > 0 {
+            if preview3DBtn.hit(loc) { preview3DBtn.flash(); onPreview3D(); return }
             if tricksBtn.hit(loc) { tricksBtn.flash(); onTricks(); return }
             if garageBtn.hit(loc) { garageBtn.flash(); onGarage(); return }
             if !switchBtn.isHidden, switchBtn.hit(loc) { switchBtn.flash(); onSwitch(); return }

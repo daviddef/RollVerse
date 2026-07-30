@@ -8,6 +8,7 @@ import SwiftUI
 final class GarageStore: ObservableObject {
     @Published var showGarage = false
     @Published var showTricks = false
+    @Published var show3D = false
     @Published var skateSetup = Setup()
     @Published var scooterSetup = Setup()
     @Published var currentRide = "skateboard"     // the scene keeps this in sync

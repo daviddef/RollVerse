@@ -280,6 +280,7 @@ final class GameScene: SKScene {
         controls.onSwitch = { [weak self] in self?.switchBuf = true }
         controls.onGarage = { [weak self] in self?.garage?.showGarage = true }
         controls.onTricks = { [weak self] in self?.garage?.showTricks = true }
+        controls.onPreview3D = { [weak self] in self?.garage?.show3D = true }
     }
 
     override func didChangeSize(_ oldSize: CGSize) {

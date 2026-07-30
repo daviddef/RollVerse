@@ -20,6 +20,7 @@ struct GameView: View {
             .onAppear { scene.garage = store }
             .sheet(isPresented: $store.showGarage) { GarageView(store: store) }
             .sheet(isPresented: $store.showTricks) { TrickGuideView(store: store) }
+            .fullScreenCover(isPresented: $store.show3D) { Preview3D(store: store) }
     }
 }
 
