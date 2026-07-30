@@ -71,10 +71,10 @@ enum World {
 
     // HALF PIPES — a channel with a wall at each end (top/bottom in world-y). Hit a
     // wall with speed to launch big air out of the pipe.
-    struct HalfPipe { let x, y, w, h: CGFloat }
+    struct HalfPipe { let x, y, w, h: CGFloat }   // length along x, transition across y
     static let halfpipes: [HalfPipe] = [
-        HalfPipe(x: 900,  y: 340,  w: 420, h: 220),   // upper plaza
-        HalfPipe(x: 2300, y: 1120, w: 480, h: 240),   // lower bowl
+        HalfPipe(x: 820,  y: 300,  w: 500, h: 300),   // upper plaza
+        HalfPipe(x: 2240, y: 1020, w: 560, h: 340),   // lower bowl
     ]
 
     // DROP-INS — a raised platform; roll off the lip to drop in with speed (works

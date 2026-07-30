@@ -83,6 +83,19 @@ final class GameScene: SKScene {
     private var boostTimer: CGFloat = 0 // while >0 the speed cap is raised (the boost holds)
     private var bigAir = false          // launched off a ramp -> unlocks the Backflip
 
+    // Half-pipe transition: how tall the walls are, and the restoring "gravity"
+    // that rolls you back down into the U.
+    private let pipeWallMax: CGFloat = 135
+    private let pipeGravity: CGFloat = 1150
+    private func halfPipeAt(_ x: CGFloat, _ y: CGFloat) -> World.HalfPipe? {
+        World.halfpipes.first { x > $0.x && x < $0.x + $0.w && y > $0.y && y < $0.y + $0.h }
+    }
+    private func pipeFloor(_ x: CGFloat, _ y: CGFloat) -> CGFloat {
+        guard let hp = halfPipeAt(x, y) else { return 0 }
+        let frac = max(-1, min(1, (y - (hp.y + hp.h / 2)) / (hp.h / 2)))
+        return pipeWallMax * frac * frac
+    }
+
     // MARK: input buffers (edge-triggered, like jumpBuf/trickBuf/switchBuf)
     private var jumpBuf = false, trickBuf = false, switchBuf = false
 
@@ -293,7 +306,16 @@ final class GameScene: SKScene {
         let inp = moveInput()
         let target = boostTimer > 0 ? 540 : eff.topSpeed     // boost raises the cap so it holds
         let a = onGround ? eff.accel : eff.accel * 0.5
-        if inp.mag > 0.1 {
+        let pipe = (onGround && !grinding) ? halfPipeAt(px, py) : nil
+        if let hp = pipe {
+            // HALF PIPE: steer ALONG the pipe (x); a U-transition ACROSS it (y).
+            vx += (inp.x * target - vx) * min(1, a * t)
+            let frac = max(-1, min(1, (py - (hp.y + hp.h / 2)) / (hp.h / 2)))
+            vy += -pipeGravity * frac * t                 // roll back down toward the flat
+            vy += inp.y * target * 1.4 * min(1, a * t)    // pump / carve up the wall
+            vy *= pow(0.9, t)                             // a little friction
+            if hypot2(vx, vy) > 12 { face = atan2(vy, vx) }
+        } else if inp.mag > 0.1 {
             let tvx = inp.x * target * inp.mag, tvy = inp.y * target * inp.mag
             vx += (tvx - vx) * min(1, a * t)
             vy += (tvy - vy) * min(1, a * t)
@@ -315,6 +337,21 @@ final class GameScene: SKScene {
         px = clampf(px, 24, World.width - 24)
         py = clampf(py, 24, World.height - 24)
 
+        // on a half-pipe transition, height rides the wall; pop off the coping
+        if onGround && !grinding {
+            if let hp = halfPipeAt(px, py) {
+                let frac = max(-1, min(1, (py - (hp.y + hp.h / 2)) / (hp.h / 2)))
+                z = pipeWallMax * frac * frac
+                if (frac > 0.9 && vy > 150) || (frac < -0.9 && vy < -150) {   // fast up the wall -> air
+                    onGround = false; bigAir = true
+                    vz = min(560, abs(vy) + 150); vy = 0                       // pop straight up off the lip
+                    pop("AIR!", Palette.cyan, px, py - z / tilt - 46)
+                }
+            } else {
+                z = 0
+            }
+        }
+
         // jump
         if jumpBuf && onGround { vz = eff.jump; onGround = false; bigAir = false; if grinding { endGrind() } }
         jumpBuf = false
@@ -322,9 +359,14 @@ final class GameScene: SKScene {
         // gravity / height
         if !onGround {
             vz -= r.gravity * t; z += vz * t; spin += spinRate * t
-            if z <= 0 {
-                z = 0; onGround = true; vz = 0; spin = 0; flip = false; spinRate = 0; bigAir = false
-                landCombo(); tryStartGrind()
+            let floor = pipeFloor(px, py)          // wall height if over a half pipe, else 0
+            if z <= floor {
+                z = floor; onGround = true; vz = 0; spin = 0; flip = false; spinRate = 0
+                if floor <= 0.5 {                  // landed on flat ground -> end the run
+                    bigAir = false
+                    landCombo(); tryStartGrind()
+                }
+                // landing back in the pipe keeps the combo going (one continuous run)
             }
         }
 
@@ -367,14 +409,6 @@ final class GameScene: SKScene {
                 vz = eff.jump * 1.4; onGround = false; bigAir = true
                 pop("PYRAMID!", Palette.cyan, px, pm.y - 20)
                 break
-            }
-            // hit either wall of a half pipe -> big air out of the pipe
-            for hp in World.halfpipes where px > hp.x && px < hp.x + hp.w && sp > 150 {
-                if (abs(py - hp.y) < 44 && vy < 0) || (abs(py - (hp.y + hp.h)) < 44 && vy > 0) {
-                    vz = eff.jump * 1.9; onGround = false; bigAir = true
-                    pop("HALF PIPE!", Palette.cyan, px, py - 40)
-                    break
-                }
             }
         }
 

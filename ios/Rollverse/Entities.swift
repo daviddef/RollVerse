@@ -300,23 +300,29 @@ enum Entities {
         root.position = CGPoint(x: hp.x + hp.w / 2, y: hp.y + hp.h / 2)
         root.zPosition = -470
         let w = hp.w, h = hp.h
+        // flat platform decks on top of each wall (where you stand to drop in)
+        root.addChild(Art.fillRoundRect(-w / 2 - 6, -h / 2 - 34, w + 12, 34, 8, SKColor(hex: 0x4a4368)))
+        root.addChild(Art.fillRoundRect(-w / 2 - 6, h / 2,      w + 12, 34, 8, SKColor(hex: 0x4a4368)))
+        root.addChild(Art.fillRoundRect(-w / 2 - 6, -h / 2 - 8, w + 12, 5, 2, SKColor(white: 1, alpha: 0.12)))
+        root.addChild(Art.fillRoundRect(-w / 2 - 6, h / 2 + 3,  w + 12, 5, 2, SKColor(white: 1, alpha: 0.12)))
+
         root.addChild(Art.fillRoundRect(-w / 2, -h / 2 + 8, w, h, 22, SKColor(white: 0, alpha: 0.22)))   // shadow
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 22, SKColor(hex: 0x322c46)))               // structure
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, h, 22, SKColor(hex: 0x2b2640)))               // structure
         // flat bottom of the pipe
-        root.addChild(Art.fillRoundRect(-w / 2 + 10, -h * 0.16, w - 20, h * 0.32, 10, SKColor(hex: 0x5a5378)))
-        // transition banks: bands from the flat (dark) up to each lip (light)
-        let bank: [UInt32] = [0x4d4670, 0x655d8c, 0x8079a6, 0x9a93be]
-        let bandH = (h * 0.34) / CGFloat(bank.count)
+        root.addChild(Art.fillRoundRect(-w / 2 + 10, -h * 0.13, w - 20, h * 0.26, 10, SKColor(hex: 0x5f5880)))
+        // curved transition banks: bands dark (flat) -> light (lip), top & bottom
+        let bank: [UInt32] = [0x393354, 0x413a5f, 0x4d4670, 0x5b5482, 0x6e6799, 0x847dae, 0x9c95c4]
+        let bandH = (h * 0.37) / CGFloat(bank.count)
         for (i, c) in bank.enumerated() {
-            let inset = 10 - CGFloat(i) * 1.5
+            let inset = 12 - CGFloat(i) * 1.4
             let yTop = -h / 2 + 8 + CGFloat(bank.count - 1 - i) * bandH
             let yBot = h / 2 - 8 - bandH - CGFloat(bank.count - 1 - i) * bandH
-            root.addChild(Art.fillRoundRect(-w / 2 + inset, yTop, w - inset * 2, bandH + 1, 5, SKColor(hex: c)))
-            root.addChild(Art.fillRoundRect(-w / 2 + inset, yBot, w - inset * 2, bandH + 1, 5, SKColor(hex: c)))
+            root.addChild(Art.fillRoundRect(-w / 2 + inset, yTop, w - inset * 2, bandH + 1, 4, SKColor(hex: c)))
+            root.addChild(Art.fillRoundRect(-w / 2 + inset, yBot, w - inset * 2, bandH + 1, 4, SKColor(hex: c)))
         }
-        // coping lips + side walls
-        root.addChild(Art.fillRoundRect(-w / 2, -h / 2, w, 8, 4, Palette.gold))
-        root.addChild(Art.fillRoundRect(-w / 2, h / 2 - 8, w, 8, 4, Palette.gold))
+        // metal coping pipes on each lip + dark side walls
+        root.addChild(Art.fillRoundRect(-w / 2, -h / 2 - 3, w, 7, 3, SKColor(hex: 0xd7d0e6)))
+        root.addChild(Art.fillRoundRect(-w / 2, h / 2 - 4,  w, 7, 3, SKColor(hex: 0xd7d0e6)))
         root.addChild(Art.fillRoundRect(-w / 2, -h / 2, 7, h, 3, SKColor(hex: 0x241f36)))
         root.addChild(Art.fillRoundRect(w / 2 - 7, -h / 2, 7, h, 3, SKColor(hex: 0x241f36)))
         return root
